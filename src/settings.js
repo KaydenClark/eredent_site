@@ -26,6 +26,7 @@ export const defaults = {
   atmo: 1.0,              // atmosphere thickness multiplier (visual)
   clouds: true,
   moons: true,
+  wildlife: true,         // distant dragon flights (stand-ins)
   detail: true,           // fractal detail below the data resolution (about 50 m per sample)
   quality: 1.0            // LOD budget multiplier
 };

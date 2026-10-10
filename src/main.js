@@ -11,6 +11,7 @@ import { biomeName } from './biomes.js';
 import { initUi } from './ui.js';
 import { Vegetation } from './vegetation.js';
 import { Ambience } from './audio.js';
+import { Dragons } from './dragons.js';
 import { mountWorkshop } from './workshop/workshop.js';
 import { zoneAt } from './biomes.js';
 
@@ -79,7 +80,8 @@ const moons = new Moons(tex.moons); scene.add(moons.group);
 const moonLight = { dirs: [new THREE.Vector3(), new THREE.Vector3()], light: [0, 0] };
 
 const vegetation = new Vegetation({ terrain, heightfield, scene, planet, quality: settings.quality });
-const hooks = { planet: [() => vegetation.clear()], frame: [] };   // later layers (vegetation, sound) register here
+const dragons = new Dragons(scene, 5);
+const hooks = { planet: [() => vegetation.clear(), p => dragons.setRadius(p.radiusKm * 1000)], frame: [] };   // later layers (vegetation, sound) register here
 export const ctx = { THREE, vegetation, scene, camera, renderer, terrain, heightfield, rig, settings, planet, hooks, sunDir: new THREE.Vector3(), tex, meta };
 
 function applyPlanet() {
@@ -248,6 +250,7 @@ addEventListener('resize', resize); resize();
 status.hidden = true;
 
 // --- loop ------------------------------------------------------------------------------------------------
+let dragonT = 0, seaward = 0; const dragonFog = new THREE.Color();
 const clock = new THREE.Clock(); let fpsT = 0, fpsN = 0, fps = 60, hudT = 0, fogT = 1;
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 if (reduce) set({ clock: false });
@@ -322,6 +325,17 @@ function frame(forcedDt) {
   vegetation.uniforms.uDay.value = dayK;
   vegetation.update(dt, camera, rig.latLon, alt);
   for (const fn of hooks.frame) fn(dt, { alt, ground, asl, dayK, sunUp });
+  {
+    const ll = rig.latLon;
+    dragonT -= dt;
+    if (dragonT <= 0) { dragonT = 2; seaward = heightfield.inside(ll.lat, ll.lon) ? faceHeading(ll.lat, ll.lon, 'water') : seaward; }
+    const e = settings.atmo, fa = terrain.material.uniforms.uFogAway.value;
+    dragonFog.setRGB(fa.x * 1.3 / (1 + fa.x * 1.3), fa.y * 1.3 / (1 + fa.y * 1.3), fa.z * 1.3 / (1 + fa.z * 1.3));
+    void e;
+    dragons.visibleWanted = settings.wildlife !== false;
+    dragons.group.visible = dragons.visibleWanted;
+    if (dragons.visibleWanted) dragons.update(dt, camera, { lat: ll.lat, lon: ll.lon, agl: alt, seaward, localHour: ((settings.hour + ll.lon / 15) % 24 + 24) % 24, fogColor: dragonFog, groundBelow: Math.max(0, ground) });
+  }
   if (ambience.on) {
     const ll = rig.latLon, coast = heightfield.land(ll.lat, ll.lon), smp = heightfield.sample(ll.lat, ll.lon);
     const shore = coast >= 0.47 ? 1 - THREE.MathUtils.smoothstep(coast, 0.47, 0.66) : THREE.MathUtils.smoothstep(coast, 0.2, 0.47) * (smp.inner > 0.5 ? 0.6 : 1);
