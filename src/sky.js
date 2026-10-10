@@ -58,6 +58,7 @@ export function makeClouds(tex, radiusKm) {
 // Moons are lit by the sun directly (not by the scene's sunlight, which dims at night for the ground's sake).
 function moonMaterial(map, sunDir) {
   return new THREE.ShaderMaterial({
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,   // the unlit side lets the sky show through
     uniforms: { map: { value: map }, uSunDir: { value: sunDir } },
     vertexShader: `varying vec2 vUv; varying vec3 vN;
       #include <common>
