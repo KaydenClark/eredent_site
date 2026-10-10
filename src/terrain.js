@@ -78,7 +78,7 @@ export class Terrain {
         uSunDir: { value: new THREE.Vector3(1, 0, 0) }, uSunColor: { value: new THREE.Color(1, 0.96, 0.9) },
         uAbyss: { value: new THREE.Color(0.012, 0.045, 0.11) },
         uMoonDir: { value: [new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1, 0)] }, uMoonLight: { value: [0, 0] },
-        uTime: { value: 0 }, uExposure: { value: 1.3 }, uFloorDist: { value: 1500 },
+        uTime: { value: 0 }, uExposure: { value: 1.3 }, uFloorDist: { value: 1500 }, uOverlay: { value: null }, uOverlayOn: { value: 0 },
         uFogSun: { value: new THREE.Vector3(1, 1, 1) }, uFogAway: { value: new THREE.Vector3(1, 1, 1) },
         uFogDensity: { value: 0 }, uFogHeight: { value: 2200 }, uCamAltM: { value: 0 }, uSunDirF: { value: new THREE.Vector3(1, 0, 0) }
       }

@@ -3,9 +3,10 @@ import { settings, set, PLANETS } from './settings.js';
 const $ = id => document.getElementById(id);
 const fmt = n => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
 
-export function bindPanel({ flyTo, places = [] }) {
+export function bindPanel({ flyTo, places = [], scenic = [] }) {
   const go = $('goto');
-  for (const p of places) { const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; go.append(o); }
+  const group = (label, list) => { const g = document.createElement('optgroup'); g.label = label; for (const p of list) { const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; g.append(o); } go.append(g); };
+  group('On the ground', scenic); group('From above', places);
   const q = $('quality'); q.value = String(settings.quality); if (!q.value) q.value = '1'; q.onchange = () => set({ quality: +q.value });
   $('sz-small').onclick = () => set({ size: 'small' });
   $('sz-earth').onclick = () => set({ size: 'earth' });

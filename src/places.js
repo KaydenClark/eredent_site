@@ -54,4 +54,40 @@ export const PLACES = [
     status: 'older-map name' }
 ];
 
-export const placeById = id => PLACES.find(p => p.id === id);
+// Ground-level starts chosen from the built data (peaks, shores and zones found in the height and mask layers).
+// `face` turns the camera on arrival: 'water' toward the nearest shoreline, 'down' downhill, a number = heading.
+// `local` is the local solar hour to show it at (the clock is paused so the light holds).
+export const SCENIC = [
+  { id: 's-forest', name: 'Forest floor, northern Ender', kind: 'forest', zone: 'Primeval mixed forest',
+    view: { lat: 24.35, lon: -51.5, alt: 1.7, heading: 320, pitch: 4, mode: 'walk' }, local: 9.5,
+    evidence: 'Ender: upper portion temperate mixed forest (Drive description). Trees are generated stand-ins at the spec’s proposed canopy heights.', status: 'derived' },
+  { id: 's-veir-peak', name: 'Veir summit ridge at sunrise', kind: 'mountain', zone: 'Snow and alpine rock',
+    view: { lat: 35.02, lon: -21.332, alt: 1.7, heading: 0, pitch: -6, mode: 'walk' }, face: 'down', local: 5.3,
+    evidence: 'Highest point of the built Veir range, about 4,190 m (spec: summits 4,400 m, Rockies-like).', status: 'derived' },
+  { id: 's-veir-shore', name: 'Lake Veir shore', kind: 'shore', zone: 'Alpine lake shore',
+    view: { lat: 49.02, lon: -29.321, alt: 1.7, heading: 120, pitch: -2, mode: 'walk' }, face: 'water', local: 16.5,
+    evidence: 'Lake Veir surface 1,552 m (derived from Bonneville). Built from the September penup lake outline; the Oct 10 outline draws a smaller lake further south.', status: 'disputed' },
+  { id: 's-beach', name: 'Equatorial beach on the inner sea', kind: 'shore', zone: 'Tropical coast',
+    view: { lat: -0.178, lon: 13.473, alt: 1.7, heading: 0, pitch: -5, mode: 'walk' }, face: 'water', local: 9.6,
+    evidence: 'Spec: beaches mainly on the tropical inner seas; inner seas pale and protected (canon). This point lies about 0.2°S on the current placement (the Malos-tip latitude question).', status: 'derived' },
+  { id: 's-volcano', name: 'Dragon Islands volcano rim', kind: 'volcano', zone: 'Volcanic summit',
+    view: { lat: 8.839, lon: -22.756, alt: 1.7, heading: 0, pitch: -8, mode: 'walk' }, face: 'down', local: 18.2,
+    evidence: 'Summit of the central Dragon Islands cone, about 3,370 m (spec: Etna-like, 3,300 m proposed).', status: 'derived' },
+  { id: 's-wetland', name: 'Malos east wetlands', kind: 'wetland', zone: 'Swamp forest and bayou',
+    view: { lat: 12.2, lon: 45.35, alt: 1.7, heading: 40, pitch: 2, mode: 'walk' }, local: 8,
+    evidence: 'Flat humid country east of the Malos Spine (Drive description, purple zone on kiros_v5).', status: 'canon' },
+  { id: 's-roan', name: 'Roan ranges above Sfere', kind: 'mountain', zone: 'Volcanic ranges',
+    view: { lat: 38.184, lon: 24.943, alt: 1.7, heading: 0, pitch: -6, mode: 'walk' }, face: 'down', local: 15,
+    evidence: 'Highest built point of the Roan ranges, about 3,640 m (spec: 3,600 m proposed, California-like volcanic blocks).', status: 'derived' },
+  { id: 's-north', name: 'Northern heights, snow line', kind: 'mountain', zone: 'Cold north',
+    view: { lat: 63.099, lon: 11.654, alt: 1.7, heading: 0, pitch: -6, mode: 'walk' }, face: 'down', local: 13,
+    evidence: 'Highest built ground north of 60°N. The Oct 10 outline draws no mountain marks on the northern islands.', status: 'disputed' },
+  { id: 's-inner-sea', name: 'Low over the protected inner sea', kind: 'sea', zone: 'Protected inner sea',
+    view: { lat: 33, lon: -5, alt: 60, heading: 70, pitch: -4, mode: 'fly' }, local: 11,
+    evidence: 'Shallow, pale, god-protected water between the continents (canon).', status: 'canon' },
+  { id: 's-outer', name: 'Over the outer ocean at dusk', kind: 'sea', zone: 'Deep outer ocean',
+    view: { lat: 20, lon: -70, alt: 40, heading: 270, pitch: -3, mode: 'fly' }, local: 18.6,
+    evidence: 'Deep, dark, dangerous water; dragons hunt over it (canon).', status: 'canon' }
+];
+
+export const placeById = id => PLACES.find(p => p.id === id) || SCENIC.find(p => p.id === id);

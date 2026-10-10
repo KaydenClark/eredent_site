@@ -79,12 +79,15 @@ export function detailAt(nx, ny, nz, h, landW, fade) {
   if (fade <= 0 || landW <= 0) return 0;
   const rugged = smoothstep(700, 2600, h);
   const ridge = 1 - Math.abs(vnoise(nx * 425, ny * 425, nz * 425) * 2 - 1);
-  const d = (ridge - 0.5) * 220 * rugged
-          + (vnoise(nx * 2000, ny * 2000, nz * 2000) - 0.5) * (40 + 60 * rugged)
+  const ridge2 = 1 - Math.abs(vnoise(nx * 1400 + 3.1, ny * 1400 + 3.1, nz * 1400 + 3.1) * 2 - 1);
+  let d = (ridge * ridge - 0.33) * 520 * rugged
+          + (ridge2 * ridge2 - 0.33) * 190 * rugged * (0.4 + 0.6 * ridge)
+          + (vnoise(nx * 2000, ny * 2000, nz * 2000) - 0.5) * (40 + 40 * rugged)
           + (vnoise(nx * 8000, ny * 8000, nz * 8000) - 0.5) * (14 + 16 * rugged)
           + (vnoise(nx * 32000, ny * 32000, nz * 32000) - 0.5) * 8
           + (vnoise(nx * 128000, ny * 128000, nz * 128000) - 0.5) * 2.5;
-  return d * fade * landW;
+  const dd = d > 0 ? d * (1 - 0.75 * smoothstep(3300, 4300, h)) : d;   // summits stay near the spec heights
+  return dd * fade * landW;
 }
 
 // distance fade of the fine relief: full within 0.03 planet radii of the camera, gone by 0.12

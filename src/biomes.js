@@ -39,6 +39,7 @@ const NAMES = {
 export function biomeName(sample, lat, h, coast) {
   const b = sample.biome;
   const z = zoneAt(b, lat, h, coast);
+  if (z !== 'water' && coast < 0.6 && z !== 'snow') return b === 4 || h > 300 ? 'Shore' : Math.abs(lat) < 25 ? 'Beach' : 'Rocky shore';
   if (z !== 'water') return NAMES[z];
   if (b === 4) return 'Lake';
   if (sample.inner > 0.5) return 'Protected inner sea';

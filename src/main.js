@@ -6,10 +6,13 @@ import { Heightfield } from './heightfield.js';
 import { Terrain } from './terrain.js';
 import { Atmosphere, Moons, makeClouds, makeStars, makeSun, setMoonRadiusCache, skyRadiance } from './sky.js';
 import { bindPanel, updateStats, setHud } from './panel.js';
-import { PLACES, placeById } from './places.js';
+import { PLACES, SCENIC, placeById } from './places.js';
 import { biomeName } from './biomes.js';
 import { initUi } from './ui.js';
 import { Vegetation } from './vegetation.js';
+import { Ambience } from './audio.js';
+import { mountWorkshop } from './workshop/workshop.js';
+import { zoneAt } from './biomes.js';
 
 // Logarithmic depth with a scale: the scene unit is a planet radius, so everything near the ground is a tiny
 // fraction of a unit and three's log2(1 + w) would be linear there (meters of depth error). log2(1 + w * K) keeps
@@ -119,9 +122,77 @@ function updateSun() {
 
 // --- camera ----------------------------------------------------------------------------------------------
 rig.t.lat = 32; rig.t.lon = -4; rig.t.alt = 4.4e6; rig.t.pitch = -90; Object.assign(rig.c, rig.t);
-const goPlace = id => { const p = placeById(id); if (p) rig.goTo(p.view); };
-bindPanel({ flyTo: goPlace, places: PLACES });
+// face toward the nearest water, or down the slope (the open view), from the data around a point
+function faceHeading(lat, lon, how) {
+  const R = planet().radiusKm * 1000, D = Math.PI / 180;
+  let best = 0, bestV = Infinity;
+  for (let a = 0; a < 360; a += 10) {
+    let v = 0;
+    for (const d of how === 'water' ? [150, 400, 900, 1600] : [400, 1200, 3000]) {
+      const la = lat + Math.cos(a * D) * d / R / D, lo = lon + Math.sin(a * D) * d / (R * Math.cos(lat * D)) / D;
+      v += how === 'water' ? heightfield.land(la, lo) : terrain.groundAt(la, lo);
+    }
+    if (v < bestV) { bestV = v; best = a; }
+  }
+  return best;
+}
+const goPlace = id => {
+  const p = placeById(id); if (!p) return;
+  const v = { ...p.view };
+  if (p.face === 'down') {    // stand on the highest drawn ground within ~2.5 km: the view opens up from there
+    const R = planet().radiusKm * 1000, D = Math.PI / 180; let bh = -1e9, bl = null;
+    for (let i = -12; i <= 12; i++) for (let j = -12; j <= 12; j++) {
+      const la = v.lat + i * 200 / R / D, lo = v.lon + j * 200 / (R * Math.cos(v.lat * D)) / D, h = terrain.groundAt(la, lo);
+      if (h > bh) { bh = h; bl = [la, lo]; }
+    }
+    v.lat = bl[0]; v.lon = bl[1];
+  }
+  if (typeof p.face === 'string') v.heading = faceHeading(v.lat, v.lon, p.face);
+  if (p.face === 'water') {   // walk on to the strand, a few meters short of the water
+    const R = planet().radiusKm * 1000, D = Math.PI / 180, a = v.heading * D;
+    for (let d = 0; d < 4000; d += 10) {
+      const la = v.lat + Math.cos(a) * 10 / R / D, lo = v.lon + Math.sin(a) * 10 / (R * Math.cos(v.lat * D)) / D;
+      if (heightfield.land(la, lo) < 0.482) break;
+      v.lat = la; v.lon = lo;
+    }
+  }
+  if (p.local !== undefined) { set({ hour: ((p.local - v.lon / 15) % 24 + 24) % 24, clock: false }); document.getElementById('clock').checked = false; ui.syncClock(settings.hour); }
+  rig.goTo(v);
+};
+ctx.goPlace = goPlace;
+// drape a registered source drawing (ink lines and lake fills) over the globe: 'penup' | 'earth_re' | null
+const overlays = {};
+ctx.setOverlay = (name, opacity = 0.85) => {
+  const u = terrain.material.uniforms;
+  if (!name) { u.uOverlayOn.value = 0; return Promise.resolve(); }
+  const file = { penup: 'overlay_penup_window.png', earth_re: 'overlay_earth_re_window.png' }[name];
+  if (!file) return Promise.resolve();
+  const p = overlays[name] || (overlays[name] = loadTex(file, { srgb: true }).then(t => { t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.needsUpdate = true; return t; }));
+  return p.then(t => { u.uOverlay.value = t; u.uOverlayOn.value = opacity; ctx.overlay = { name, opacity }; })
+    .catch(() => { u.uOverlayOn.value = 0; console.warn('overlay not available:', file); });
+};
+bindPanel({ flyTo: goPlace, places: PLACES, scenic: SCENIC });
 const ui = initUi({ rig, ctx, places: PLACES, goPlace });
+const ALL_PLACES = [...SCENIC, ...PLACES];
+const workshop = mountWorkshop({
+  getView: () => rig.view,
+  flyTo: view => { const p = ALL_PLACES.find(q => q.view === view); p ? goPlace(p.id) : rig.goTo(view); },
+  places: ALL_PLACES,
+  setOverlay: (name, opacity) => ctx.setOverlay(name, opacity),
+  onOpenChange: open => { document.body.classList.toggle('ws-open', open); if (open && document.pointerLockElement) document.exitPointerLock(); rig.keys.blur(); }
+});
+ctx.workshop = workshop;
+
+// --- sound -----------------------------------------------------------------------------------------------
+const ambience = new Ambience(); ctx.ambience = ambience;
+{
+  const b = document.getElementById('m-sound'), vol = document.getElementById('vol');
+  vol.value = ambience.volume;
+  const sync = () => { b.setAttribute('aria-pressed', String(ambience.on)); b.textContent = ambience.on ? 'Sound on' : 'Sound off'; vol.hidden = !ambience.on; };
+  b.onclick = async () => { if (ambience.on) ambience.disable(); else { try { await ambience.enable(); } catch { b.textContent = 'No audio'; return; } } sync(); };
+  vol.oninput = () => ambience.setVolume(+vol.value);
+  sync();
+}
 
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -135,7 +206,7 @@ const clock = new THREE.Clock(); let fpsT = 0, fpsN = 0, fps = 60, hudT = 0, fog
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 if (reduce) set({ clock: false });
 const fogA = new THREE.Vector3(), fogB = new THREE.Vector3(), tmpV = new THREE.Vector3(), tmpU = new THREE.Vector3();
-ctx.fog = { sun: terrain.material.uniforms.uFogSun.value, away: terrain.material.uniforms.uFogAway.value, density: 0, height: 2200, camAlt: 0 };
+ctx.fog = { sun: terrain.material.uniforms.uFogSun.value, away: terrain.material.uniforms.uFogAway.value, density: 0, height: 1500, camAlt: 0 };
 
 function updateFog(aslM, dt) {
   const u = terrain.material.uniforms, R = planet().radiusKm * 1000;
@@ -205,6 +276,12 @@ function frame(forcedDt) {
   vegetation.uniforms.uDay.value = dayK;
   vegetation.update(dt, camera, rig.latLon, alt);
   for (const fn of hooks.frame) fn(dt, { alt, ground, asl, dayK, sunUp });
+  if (ambience.on) {
+    const ll = rig.latLon, coast = heightfield.land(ll.lat, ll.lon), smp = heightfield.sample(ll.lat, ll.lon);
+    const shore = coast >= 0.47 ? 1 - THREE.MathUtils.smoothstep(coast, 0.47, 0.66) : THREE.MathUtils.smoothstep(coast, 0.2, 0.47) * (smp.inner > 0.5 ? 0.6 : 1);
+    const v = rig.nav ? Math.hypot(rig.nav.vel.e, rig.nav.vel.n, rig.nav.vel.u) : 0;
+    ambience.update(dt, { zone: heightfield.inside(ll.lat, ll.lon) ? zoneAt(smp.biome, ll.lat, ground, coast) : 'water', agl: alt, shore, day: dayK, altitude: asl, speed: v });
+  }
   renderer.render(scene, camera);
 
   fpsN++; fpsT += dt; if (fpsT > 0.5) { fps = fpsN / fpsT; fpsN = 0; fpsT = 0; }

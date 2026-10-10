@@ -42,7 +42,7 @@ vec3 applyFog(vec3 col, vec3 toPoint, float pointAltM, float radiusM) {
   float f = 1.0 - exp(-uFogDensity * dist * k);
   vec3 v = toPoint / max(length(toPoint), 1e-20);
   float s = 0.5 + 0.5 * dot(v, uSunDirF);
-  vec3 fc = mix(uFogAway, uFogSun, smoothstep(0.0, 1.0, s * s));
+  vec3 fc = min(mix(uFogAway, uFogSun, pow(s, 5.0)), vec3(3.0));
   return mix(col, fc, f);
 }
 `;
@@ -80,11 +80,14 @@ float detail(vec3 n, float h, float landW, float fade) {
   if (fade <= 0.0 || landW <= 0.0) return 0.0;
   float rugged = smoothstep(700.0, 2600.0, h);
   float ridge = 1.0 - abs(vnoise(n * 425.0) * 2.0 - 1.0);
-  float d = (ridge - 0.5) * 220.0 * rugged
-          + (vnoise(n * 2000.0) - 0.5) * (40.0 + 60.0 * rugged)
+  float ridge2 = 1.0 - abs(vnoise(n * 1400.0 + 3.1) * 2.0 - 1.0);
+  float d = (ridge * ridge - 0.33) * 520.0 * rugged
+          + (ridge2 * ridge2 - 0.33) * 190.0 * rugged * (0.4 + 0.6 * ridge)
+          + (vnoise(n * 2000.0) - 0.5) * (40.0 + 40.0 * rugged)
           + (vnoise(n * 8000.0) - 0.5) * (14.0 + 16.0 * rugged)
           + (vnoise(n * 32000.0) - 0.5) * 8.0
           + (vnoise(n * 128000.0) - 0.5) * 2.5;
+  if (d > 0.0) d *= 1.0 - 0.75 * smoothstep(3300.0, 4300.0, h);   // summits stay near the spec heights
   return d * fade * landW * uDetail;
 }
 
@@ -127,6 +130,7 @@ uniform vec3 uSunDir, uSunColor, uAbyss;
 uniform vec3 uMoonDir[2]; uniform float uMoonLight[2];
 uniform float uTime, uExposure, uRadiusM, uFloorDist;
 uniform vec4 uWindowF;
+uniform sampler2D uOverlay; uniform float uOverlayOn;
 varying vec3 vNormal, vSphere, vView; varying vec2 vUvW; varying float vIn, vDepth, vAlt, vCoast;
 #include <common>
 #include <logdepthbuf_pars_fragment>
@@ -149,7 +153,7 @@ void main() {
   bool lake = abs(biome - 4.0) < 0.5;
   // the shoreline: the smooth land fraction, roughened by noise once it is close enough to matter
   float closeK = 1.0 - smoothstep(2000.0, 12000.0, distM);
-  float rough = (vnoise(vSphere * 60000.0) - 0.5) * 0.10 + (vnoise(vSphere * 400000.0) - 0.5) * 0.05;
+  float rough = (vnoise(vSphere * 60000.0) - 0.5) * 0.035 + (vnoise(vSphere * 400000.0) - 0.5) * 0.02;
   float cf = vIn > 0.5 ? texture2D(uCoastL, vUvW).r + rough * closeK : 0.0;
   float wf = 1.0 - smoothstep(0.44, 0.5 + 0.06 * (1.0 - closeK), cf);
   float sunUp = dot(n, uSunDir);                              // -1 night .. 1 noon, by the sphere normal
@@ -174,11 +178,22 @@ void main() {
     vec3 R = reflect(-uSunDir, nn);
     float spec = pow(max(dot(R, V), 0.0), mix(600.0, 90.0, 1.0 - inner)) * mix(0.9, 0.45, 1.0 - inner);
     vec3 skyTint = mix(vec3(0.05, 0.09, 0.16), vec3(0.35, 0.55, 0.85), day);
+    // low down, the water mirrors the actual horizon sky (the same radiance the fog fades into)
+    if (uFogDensity > 0.0) {
+      float sa = 0.5 + 0.5 * dot(normalize(reflect(-V, nn)), uSunDirF);
+      vec3 hz = min(mix(uFogAway, uFogSun, pow(sa, 6.0)), vec3(2.5));
+      skyTint = mix(skyTint, hz * 0.9, smoothstep(0.0, 1.0, uFogDensity / 3e-5));
+    }
     float diff = max(dot(nn, uSunDir), 0.0);
-    // shallow water near the shore shows the bottom (pale, warmer); foam where waves meet the land
-    float shallow = smoothstep(0.25, 0.46, cf) * (lake ? 0.4 : 1.0);
-    vec3 wbase = mix(base, base * vec3(1.25, 1.3, 1.05) + vec3(0.03, 0.05, 0.03), shallow * 0.8);
-    colWater = wbase * (0.04 + 0.96 * diff) * uSunColor + skyTint * (0.08 + 0.55 * fres) * day + uSunColor * spec * day * 1.6;
+    // up close the water has a body of its own: turquoise over sand in the protected shallows, near-black navy on the
+    // outer ocean, cold blue in the lakes; far away the painted color layer (the orbital look) takes over
+    float shallow = smoothstep(0.22, 0.47, cf) * (1.0 - smoothstep(60.0, 400.0, depth));
+    vec3 deepC = lake ? vec3(0.015, 0.07, 0.12) : inner > 0.5 ? vec3(0.02, 0.13, 0.15) : mix(vec3(0.02, 0.09, 0.12), vec3(0.004, 0.018, 0.045), smoothstep(100.0, 1500.0, depth));
+    vec3 shallowC = lake ? vec3(0.08, 0.17, 0.18) : vec3(0.22, 0.36, 0.30);
+    vec3 body = mix(deepC, shallowC, shallow * (inner > 0.5 || lake ? 0.85 : 0.5));
+    vec3 wbase = mix(base, body, closeK);
+    float fr = 0.02 + 0.98 * fres;
+    colWater = mix(wbase * (0.2 + 0.8 * diff) * uSunColor * max(day, 0.03), skyTint, fr) + uSunColor * spec * day * 1.6;
     float foamBand = smoothstep(0.34, 0.44, cf) * (1.0 - smoothstep(0.44, 0.5, cf));
     float surf = vnoise(vSphere * 260000.0 + vec3(uTime * 0.4, 0.0, -uTime * 0.3));
     float foam = foamBand * smoothstep(0.35, 0.75, surf + 0.25 * sin(uTime * 1.3 + cf * 40.0)) * (lake || inner > 0.5 ? 0.45 : 0.9) * closeK;
@@ -236,7 +251,10 @@ void main() {
     col += base * md * uMoonLight[i] * vec3(0.55, 0.62, 0.75) * (1.0 - day);
   }
   col = applyFog(col, vView, max(vAlt, 0.0), uRadiusM);
-  gl_FragColor = vec4(tonemap(col), 1.0);
+  vec3 outC = tonemap(col);
+  // a source drawing draped over the ground for comparison (workshop); not part of the world
+  if (uOverlayOn > 0.0 && vIn > 0.5) { vec4 ov = texture2D(uOverlay, vUvW); outC = mix(outC, ov.rgb, ov.a * uOverlayOn); }
+  gl_FragColor = vec4(outC, 1.0);
   #include <colorspace_fragment>
 }
 `;

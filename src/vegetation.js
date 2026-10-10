@@ -145,7 +145,7 @@ const ZONES = {
 
 const LAYERS = {
   trees: { cell: 48, per: 3, radius: 2600, chunk: 8, density: { tropical: 1, mixed: 0.9, taiga: 0.95, wetland: 0.45, bayou: 0.55 } },
-  under: { cell: 24, per: 2, radius: 700, chunk: 8 },
+  under: { cell: 24, per: 2, radius: 700, chunk: 8, density: { snow: 0.1, alpine: 0.55, tundra: 0.45, desert: 0.35 } },
   ground: { cell: 4, per: 1, radius: 95, chunk: 8 }
 };
 
@@ -262,7 +262,7 @@ export class Vegetation {
           const zone = zoneAt(samp.biome, lat, h, coast);
           const Z = ZONES[zone]; if (!Z) continue;
           const list = Z[layer]; if (!list || !list.length) continue;
-          let dens = layer === 'trees' ? (L.density[zone] ?? 0) : 1;
+          let dens = layer === 'trees' ? (L.density[zone] ?? 0) : (L.density?.[zone] ?? 1);
           // natural clearings and meadows (proposed in the spec): fewer big trees, more ground cover
           const clear = vnoise(lat * 900, lon * 900, 7.7);
           if (layer === 'trees') dens *= clear > 0.66 ? 0.12 : 1;

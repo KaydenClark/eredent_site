@@ -86,3 +86,4 @@ dialog#help .note { margin-top: 14px; color: var(--mist); }
 dialog#help form { margin-top: 16px; text-align: right; }
 dialog#help form button { all: unset; cursor: pointer; padding: 6px 14px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); }
 @media (max-width: 640px) { .modes kbd { display: none; } .modes button { padding: 6px 8px; } }
+.modes input[type=range] { width: 80px; accent-color: var(--shoal); align-self: center; margin: 0 6px; }

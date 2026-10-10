@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workshop harness</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,500;1,300&family=IBM+Plex+Sans+Condensed:wght@400;500&family=IBM+Plex+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="/src/style.css">
+<style>
+  /* Stand-in for the 3D view: shows what the workshop asked the host to do. */
+  #fake { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 40% 45%, #12324a, #04070d 60%); }
+  #log { font: 12px/1.6 var(--f-data); color: var(--mist); white-space: pre-wrap; max-width: 46ch; padding: 16px; }
+  #keys { position: fixed; left: 16px; bottom: 16px; font: 12px var(--f-data); color: var(--mist); }
+</style>
+</head>
+<body>
+<div id="fake"><div id="log">Fake host: no 3D engine here.
+Press J (or the Workshop button) to open the panel.</div></div>
+<div id="keys">3D keys received: <span id="keycount">0</span> (last: <span id="lastkey">none</span>)</div>
+<script type="module">
+  import { mountWorkshop } from './workshop.js';
+  // src/places.js is shared with the 3D engine; if it is mid-edit and fails to load, use a small stand-in list.
+  let PLACES;
+  try { ({ PLACES } = await import('../places.js')); }
+  catch (err) {
+    console.warn('places.js failed to load, using harness stand-ins', err);
+    PLACES = [
+      { id: 'orbit', name: 'Orbit, the whole cluster', kind: 'overview', view: { lat: 32, lon: -4, alt: 4.4e6, heading: 0, pitch: -90, mode: 'orbit' }, evidence: 'Harness stand-in (places.js did not load).', status: 'canon' },
+      { id: 'veir', name: 'Lake Veir and the Veir Mountains', kind: 'lake', view: { lat: 46, lon: -28, alt: 420e3, heading: 0, pitch: null, mode: 'orbit' }, evidence: 'Harness stand-in (places.js did not load).', status: 'disputed' },
+      { id: 'dire', name: 'Dire Lake basin', kind: 'lake', view: { lat: 15.4, lon: 32.9, alt: 260e3, heading: 0, pitch: null, mode: 'orbit' }, evidence: 'Harness stand-in (places.js did not load).', status: 'disputed' },
+      { id: 'north', name: 'Northern islands and the Ice Sea', kind: 'islands', view: { lat: 62, lon: 20, alt: 500e3, heading: 0, pitch: null, mode: 'orbit' }, evidence: 'Harness stand-in (places.js did not load).', status: 'older-map name' }
+    ];
+  }
+
+  const log = document.getElementById('log');
+  const say = s => { log.textContent = `${new Date().toLocaleTimeString()}  ${s}\n` + log.textContent.split('\n').slice(0, 14).join('\n'); };
+  let view = { lat: 46.2, lon: -27.6, alt: 420000, heading: 10, pitch: -35, mode: 'orbit' };
+  let n = 0;
+  // Mimics the 3D controls, which listen for keys on window.
+  addEventListener('keydown', e => { n++; document.getElementById('keycount').textContent = n; document.getElementById('lastkey').textContent = e.key; });
+
+  window.workshop = mountWorkshop({
+    getView: () => ({ ...view }),
+    flyTo: v => { view = { ...view, ...v, pitch: v.pitch ?? -45 }; say(`flyTo ${JSON.stringify(v)}`); },
+    places: PLACES,
+    setOverlay: (name, opacity) => say(`setOverlay(${JSON.stringify(name)}, ${opacity})`),
+    onOpenChange: open => say(`onOpenChange(${open})`)
+  });
+  window.fakeHost = { setView: v => { view = v; } };
+</script>
+</body>
+</html>
