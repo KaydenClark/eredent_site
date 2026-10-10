@@ -90,38 +90,60 @@ Then open http://localhost:5173/. If the overnight preview server is still runni
 
 ## Evidence
 
-- **Tests:** `npm test` passes 43/43 (navigation, workshop store, brief, markdown reader).
+- **Tests:** `npm test` passes 54/54 (navigation 15, workshop store 28, brief, markdown reader).
   - The navigation and store tests were written first and failed before their modules existed.
   - The trunk-collision test failed before its fix.
-- **Build:** `npm run build` passes (last run 02:28 MDT; this is re-run at the end of the night, see the status file).
-- **GPU/CPU ground agreement:** the drawn surface matches the walker's ground within 0.01–0.23 m at 8 test points.
-  Before the overnight fix it was off by up to 2.7 m.
+  - 11 store tests reproduced data-loss bugs found in review before they were fixed: merge import reverting newer
+    edits, two tabs overwriting each other, corrupt data being clobbered, loose dates.
+- **Build:** `npm run build` passes, and its new `check-dist` step confirms the output holds no workshop, map
+  thumbnails, overlays, variant data or Drive links. Last run time is in `docs/OVERNIGHT-STATUS.md`.
+- **GPU/CPU ground agreement:** the drawn surface matches the walker's ground within 0.01–0.23 m at 8 test points,
+  including two lake shores.
+  - Root causes found and fixed overnight:
+    - GPU `asin`/`atan` imprecision put the ground up to 2.7 m off on slopes.
+    - The shoreline formula jumped at texel edges, making 40 m walls at lake banks.
+- **Independent review:** a read-only review of the whole branch found 14 issues. All were fixed:
+  - publication of private material;
+  - notebook data loss;
+  - swell vs. wading eye;
+  - zone height parity;
+  - stale async loads;
+  - focus and keyboard traps;
+  - vegetation instance caps;
+  - memory.
+- **Playtest:** a structured run of the brief's checklist passed every functional item with no console errors.
+  - Screenshots and the report are in `docs/playtest/`, with a follow-up table of the fixes made afterwards.
+  - The screenshots were taken before those fixes and the vegetation pass, so a few show the problems that were
+    then fixed.
 - **Performance on the build machine** (RTX 5070, Chromium 152 in the Claude desktop browser pane), 60 synchronous
-  frames per measurement, at 1024×768:
-  - about 2.3 ms per frame walking in the forest;
-  - about 2.6 ms per frame flying 370 m over it (5.4 M triangles, 52 k plant instances).
+  renders per figure:
+  - about 0.5 ms at orbit;
+  - about 2.8–3.9 ms walking in the forest;
+  - about 2.6–3.0 ms flying low over it, at 1024×768–1280×800 with 4–5 M triangles and about 40–52 k plant
+    instances.
+  - The vegetation pass added about 7% triangles.
   - Not measured on any other hardware. The Quality select (Fast, Balanced, Fine) scales the tile budget, the
     vegetation radius and the resolution.
-- **Playtest screenshots and checklist:** `docs/playtest/`.
 
 ## Caveats (honest limits)
 
 - **Generated, not canon:** trees, rocks, ground cover, relief finer than the ~1 km data, dragons and sound. The
-  shapes are generic stand-ins.
+  shapes are generic stand-ins in place of named flora.
 - **Not yet in the world:** shadows, rivers (out of scope), birds, sea life and megafauna models.
 - **Lighting and weather:** the sky is single scattering plus a fog approximation. Weather is limited to dawn mist and
   cold-sea fog.
-- **Oct 10 variant cliffs:** the variant places the new Lake Veir inside the old mountain belt. Its far shore is a
-  near-vertical wall more than a kilometre high. That is the data, not a renderer bug. The basin widths for the
-  smaller lakes are guesses (`docs/oct10-variant.md`).
-- **Elevation readout includes generated relief:** high ridges have generated relief up to a few hundred meters (damped
-  near summits), so the HUD elevation can read 4.3–4.5 km where the spec table says 4.4 km summits.
-- **Source files are served from the dev server:** the workshop shows the originals from `docs/` and `maps/` through the
-  dev server, so they are not in `npm run build`. Merging this branch to `main` would deploy everything committed
-  under `public/` and `src/` to GitHub Pages, including derived overlays and small thumbnails of your maps. Decide that
-  before merging.
-- **Browser pane quirks:** in the Claude desktop browser pane the frame rate shown in the HUD is throttled (30 fps).
-  In a normal browser window it runs at the display rate.
+- **The Oct 10 variant is a what-if:** the new Lake Veir sits inside the old Veir mark belt, so its surroundings are
+  steep. The basin widths for the smaller lakes and two range-box assignments are guesses, all documented in
+  `docs/oct10-variant.md`. The biome zones (kiros_v5) were drawn for the September layout.
+- **Elevation readout includes generated relief:** high ridges carry generated relief of up to a few hundred meters
+  (damped near summits), so the HUD elevation can read 4.1–4.5 km where the spec table says 4.4 km summits.
+- **The Workshop needs the dev server:** it only exists under `npm run dev`. The public build leaves it and all
+  private source material out, and the build fails if any slips in. Merging this branch to `main` would publish the
+  explorable world only. The derived data stays in the repository under `public/`, so it is still in git history.
+- **Browser pane quirks:** in the Claude desktop browser pane the HUD frame rate is throttled (about 30 fps). In a
+  normal browser window it runs at the display rate.
+- **Not exercised by automation:** mouse capture and Esc release need a person (the browser handles them natively),
+  and so does the on-screen touch pad.
 
 ## Next useful questions to grill
 

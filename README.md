@@ -58,10 +58,12 @@ build, or the Oct 10 outline built as a variant when `public/textures/oct10/` ex
 | `docs/source-comparison.md` | The September vs Oct 10 comparison, with numbers. |
 | `docs/MORNING-HANDOFF.md` | Start here after the overnight build: route, evidence, caveats, questions. |
 
-Previews of the private source maps (`public/sources/previews`, `thumbs`) are regenerated locally by
-`python pipeline/compare_sources.py` and are not committed. The workshop shows the original files through the dev
-server, so they are not part of `npm run build`. Merging to `main` publishes whatever is committed under `public/`
-and `src/` (including the small fallback thumbnails in `src/workshop/thumbs/`), so decide that first.
+**Private sources stay local.** The workshop (and its thumbnails and Drive references) is only loaded by the dev
+server; a production build leaves it out, strips the dev-only data from `dist/` (source previews and traced ink,
+overlays, the comparison data, the Oct 10 variant), and `npm run build` ends with `scripts/check-dist.mjs`, which fails
+if any of that or a Google Drive/Docs link reaches `dist/`. So the Pages workflow on `main` would publish only the
+explorable world. Previews of the source maps (`public/sources/previews`, `thumbs`) are regenerated locally by
+`python pipeline/compare_sources.py` and are not committed.
 
 ## Rebuild the layers
 
@@ -69,6 +71,9 @@ and `src/` (including the small fallback thumbnails in `src/workshop/thumbs/`), 
 pip install -r pipeline/requirements.txt
 python pipeline/run_all.py
 ```
+
+`python pipeline/run_all.py --variant oct10` builds the Oct 10 outline as a separate terrain variant
+(`docs/oct10-variant.md`); without the flag the September build is reproduced unchanged.
 
 Steps: `masks` (land and water by nesting parity, lakes from blue ink, mountain marks) → `register` (biome map onto
 the outline grid) → `project` (placement on the sphere) → `terrain` (heights, lakes, bathymetry, zones) → `render`
