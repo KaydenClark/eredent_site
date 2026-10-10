@@ -140,8 +140,9 @@ Then open http://localhost:5173/. If the overnight preview server is still runni
 - **The Workshop needs the dev server:** it only exists under `npm run dev`. The public build leaves it and all
   private source material out, and the build fails if any slips in. Merging this branch to `main` would publish the
   explorable world only. The derived data stays in the repository under `public/`, so it is still in git history.
-- **Browser pane quirks:** in the Claude desktop browser pane the HUD frame rate is throttled (about 30 fps). In a
-  normal browser window it runs at the display rate.
+- **Performance still needs follow-up:** the builder saw about 30 fps in its browser pane. Codex's independent
+  Chrome automation check saw about 10 fps and two timed-out Workshop clicks. The synchronous render timings
+  above do not establish smooth real-time performance in a normal browser window.
 - **Not exercised by automation:** mouse capture and Esc release need a person (the browser handles them natively),
   and so does the on-screen touch pad.
 
