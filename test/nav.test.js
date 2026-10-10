@@ -148,3 +148,22 @@ test('look deltas are consumed once', () => {
   k.look(10, -5);
   assert.deepEqual([k.read().lookX, k.read().lookY], [10, 0]);
 });
+
+test('walking into a tree trunk stops at its bark instead of passing through', () => {
+  // a 4 m-radius trunk 20 m north of the start
+  const R = R_SMALL, D = Math.PI / 180;
+  const trunk = { lat: 30 + 20 / R / D, lon: 10, r: 4 };
+  const collide = (lat, lon) => {
+    const dn = (lat - trunk.lat) * D * R, de = (lon - trunk.lon) * D * R * Math.cos(lat * D), d = Math.hypot(dn, de);
+    return d < trunk.r + 0.4 ? { dn: dn / (d || 1) * (trunk.r + 0.4 - d), de: de / (d || 1) * (trunk.r + 0.4 - d) } : null;
+  };
+  const env = { ...flat(), collide };
+  const nav = createNav({ lat: 30, lon: 10, heading: 0, mode: 'walk', env });
+  run(nav, { ...idle(), forward: true }, env, 10);
+  const dn = (nav.lat - trunk.lat) * D * R;
+  assert.ok(dn <= -(trunk.r + 0.39), `ended ${(-dn).toFixed(2)} m from the trunk center`);
+  // flying ignores trunks (canopies are passable from above)
+  const fly = createNav({ lat: 30, lon: 10, heading: 0, mode: 'fly', h: 102, env });
+  run(fly, { ...idle(), forward: true }, env, 3);
+  assert.ok((fly.lat - trunk.lat) * D * R > 0, 'flew past');
+});

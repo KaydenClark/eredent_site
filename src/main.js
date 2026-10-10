@@ -70,6 +70,8 @@ const terrain = new Terrain(tex, meta, heightfield); scene.add(terrain.mesh);
 const world = {
   groundAt: (lat, lon, camPos) => terrain.groundAt(lat, lon, camPos),
   isWater: (lat, lon) => heightfield.land(lat, lon) < 0.47,
+  collide: (lat, lon) => vegetation.group.visible ? vegetation.collide(lat, lon) : null,
+  clearSpot: (lat, lon) => vegetation.clearSpot(lat, lon),
   gravity: () => 9.81 * planet().gravity
 };
 const rig = new CameraRig(camera, canvas, world);

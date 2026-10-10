@@ -30,7 +30,7 @@ export class CameraRig {
   onModeChange(fn) { this.listeners.add(fn); }
   _emit() { for (const fn of this.listeners) fn(this.mode); }
 
-  env() { return { radiusM: this.radiusM, gravity: this.world.gravity(), groundAt: (la, lo) => this.world.groundAt(la, lo), isWater: (la, lo) => this.world.isWater(la, lo) }; }
+  env() { return { radiusM: this.radiusM, gravity: this.world.gravity(), groundAt: (la, lo) => this.world.groundAt(la, lo), isWater: (la, lo) => this.world.isWater(la, lo), collide: this.mode === 'walk' && this.world.collide ? (la, lo) => this.world.collide(la, lo) : null }; }
 
   setRadius(m) {
     const ratio = m / this.radiusM; this.radiusM = m;
@@ -87,6 +87,7 @@ export class CameraRig {
       return;
     }
     const from = this.view;
+    if (mode === 'walk' && this.world.clearSpot) Object.assign(from, this.world.clearSpot(from.lat, from.lon));   // not inside a tree
     const env = this.env();
     this.flight = null;
     this.nav = createNav({ lat: from.lat, lon: from.lon, heading: from.heading, pitch: opts.pitch ?? THREE.MathUtils.clamp(from.pitch, -30, 20), mode, env,

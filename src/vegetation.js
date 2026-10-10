@@ -145,6 +145,11 @@ const ZONES = {
   snow: { trees: [], under: [['boulder', 0.6]], ground: [] }
 };
 
+// trunk radius as a fraction of height (matches the shapes above), and low-crown radius for young trees
+const TRUNK = { sequoia: 0.045, fir: 0.035, spruce: 0.025, oak: 0.03, jungle: 0.03, emergent: 0.06, cypress: 0.05,
+  sapling: 0.03, youngfir: 0.035, krumm: 0.05, boulder: 0.45 };
+const CROWN = { youngfir: 0.2, krumm: 0.3, sapling: 0.15, bush: 0.5, boulder: 0.5 };
+
 const LAYERS = {
   trees: { cell: 40, per: 3, radius: 2600, chunk: 8, density: { tropical: 1, mixed: 0.9, taiga: 0.95, wetland: 0.45, bayou: 0.55 } },
   under: { cell: 24, per: 2, radius: 700, chunk: 8, density: { snow: 0.1, alpine: 0.55, tundra: 0.45, desert: 0.35 } },
@@ -322,6 +327,50 @@ export class Vegetation {
       }
     }
     return keys;
+  }
+
+  // Solid things near a walker: trunks of trees and young trees, and boulders. Radii follow the drawn shapes.
+  _solids(lat, lon, reach) {
+    const R = this.terrain.radiusM, out = [];
+    for (const layer of ['trees', 'under']) {
+      for (const k of this._chunkKeys(layer, lat, lon, reach)) {
+        const ch = this.chunks.get(k.key); if (!ch) continue;
+        for (const [name, rows] of Object.entries(ch.data)) {
+          const tw = TRUNK[name]; if (!tw) continue;
+          for (let r = 0; r < rows.length; r += 7) {
+            const dn = (rows[r] - lat) * D2R * R, de = (rows[r + 1] - lon) * D2R * R * Math.cos(lat * D2R);
+            if (Math.abs(dn) > reach || Math.abs(de) > reach) continue;
+            const w = (0.85 + rows[r + 5] * 0.3) * (layer === 'trees' ? 1.35 : 1);
+            out.push({ dn, de, r: tw * rows[r + 3] * w, crown: CROWN[name] ? CROWN[name] * rows[r + 3] * w : 0 });
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  // push (meters east/north) that moves a walker at lat/lon out of any trunk; null when clear
+  collide(lat, lon, body = 0.4) {
+    let best = null, depth = 0;
+    for (const t of this._solids(lat, lon, 12)) {
+      const d = Math.hypot(t.dn, t.de), pen = t.r + body - d;
+      if (pen > depth) { depth = pen; const k = d > 1e-6 ? pen / d : 1; best = { dn: -t.dn * k, de: -t.de * k }; }
+    }
+    return best;
+  }
+
+  // the nearest spot (lat, lon) within ~60 m that is clear of trunks and of low crowns, for landing
+  clearSpot(lat, lon) {
+    const R = this.terrain.radiusM, solids = this._solids(lat, lon, 80);
+    const ok = (dn, de) => solids.every(t => Math.hypot(t.dn - dn, t.de - de) > Math.max(t.r + 1.2, t.crown));
+    for (let ring = 0; ring <= 20; ring++) {
+      const n = Math.max(1, ring * 6);
+      for (let i = 0; i < n; i++) {
+        const a = i / n * Math.PI * 2, dn = Math.cos(a) * ring * 3, de = Math.sin(a) * ring * 3;
+        if (ok(dn, de)) return { lat: lat + dn / R / D2R, lon: lon + de / (R * Math.cos(lat * D2R)) / D2R };
+      }
+    }
+    return { lat, lon };
   }
 
   _radius(layer) {

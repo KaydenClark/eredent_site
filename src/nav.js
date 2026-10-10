@@ -62,6 +62,13 @@ export function stepNav(nav, input, dt, env) {
     if (Math.abs(nav.vel.e) < 1e-4 && te === 0) nav.vel.e = 0;
     if (Math.abs(nav.vel.n) < 1e-4 && tn === 0) nav.vel.n = 0;
     move(nav, nav.vel.e * dt, nav.vel.n * dt, R);
+    // trunks: pushed back out to the bark, sliding along it
+    const push = env.collide?.(nav.lat, nav.lon);
+    if (push) {
+      move(nav, push.de, push.dn, R);
+      const l = Math.hypot(push.de, push.dn) || 1, into = (nav.vel.e * push.de + nav.vel.n * push.dn) / l;
+      if (into < 0) { nav.vel.e -= into * push.de / l; nav.vel.n -= into * push.dn / l; }
+    }
     const ground = env.groundAt(nav.lat, nav.lon);
     nav.inWater = !!env.isWater?.(nav.lat, nav.lon);
     const eye = nav.inWater ? WADE_EYE : EYE;
