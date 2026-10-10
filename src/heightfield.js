@@ -1,20 +1,94 @@
-// CPU copy of the 16-bit height layer, for the camera (stay above ground) and the HUD.
+import { vnoise } from './noise.js';
+
+// CPU copies of the regional layers (height, mask, coast), sampled exactly the way the terrain shader samples them,
+// plus the same fractal relief the GPU adds below the data resolution. The walking camera, the vegetation and the
+// HUD all read the ground from here, so what they think the ground is matches what is drawn.
+
+function pixels(image) {
+  const c = document.createElement('canvas'); c.width = image.width; c.height = image.height;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(image, 0, 0);
+  return g.getImageData(0, 0, c.width, c.height).data;
+}
+
 export class Heightfield {
-  constructor(image, window) {
-    const c = document.createElement('canvas'); c.width = image.width; c.height = image.height;
-    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(image, 0, 0);
-    this.data = g.getImageData(0, 0, c.width, c.height).data;
-    this.w = c.width; this.h = c.height;
+  constructor(heightImage, window, maskImage = null, coastImage = null) {
+    this.data = pixels(heightImage);
+    this.w = heightImage.width; this.h = heightImage.height;
     this.lon0 = window.lon[0]; this.lon1 = window.lon[1]; this.lat0 = window.lat[0]; this.lat1 = window.lat[1];
+    this.mask = maskImage ? pixels(maskImage) : null;
+    this.mw = maskImage ? maskImage.width : 0; this.mh = maskImage ? maskImage.height : 0;
+    this.coast = coastImage ? pixels(coastImage) : null;
+    this.cw = coastImage ? coastImage.width : 0; this.ch = coastImage ? coastImage.height : 0;
   }
-  // surface height in meters above sea level (0 over the ocean, lake surfaces flat)
-  at(lat, lon) {
-    if (lon < this.lon0 || lon > this.lon1 || lat < this.lat0 || lat > this.lat1) return 0;
-    const u = (lon - this.lon0) / (this.lon1 - this.lon0) * this.w - 0.5;
-    const v = (this.lat1 - lat) / (this.lat1 - this.lat0) * this.h - 0.5;   // image row 0 = north
-    const x0 = Math.max(0, Math.min(this.w - 2, Math.floor(u))), y0 = Math.max(0, Math.min(this.h - 2, Math.floor(v)));
+
+  inside(lat, lon) { return !(lon < this.lon0 || lon > this.lon1 || lat < this.lat0 || lat > this.lat1); }
+
+  // bilinear between texel centers, image row 0 = north; identical to sampleH() in the shader
+  _bilinear(data, w, h, lat, lon, decode) {
+    const u = (lon - this.lon0) / (this.lon1 - this.lon0) * w - 0.5;
+    const v = (this.lat1 - lat) / (this.lat1 - this.lat0) * h - 0.5;
+    const x0 = Math.max(0, Math.min(w - 2, Math.floor(u))), y0 = Math.max(0, Math.min(h - 2, Math.floor(v)));
     const fx = Math.min(1, Math.max(0, u - x0)), fy = Math.min(1, Math.max(0, v - y0));
-    const h = (x, y) => { const i = (y * this.w + x) * 4; return this.data[i] * 256 + this.data[i + 1] - 6000; };
-    return (h(x0, y0) * (1 - fx) + h(x0 + 1, y0) * fx) * (1 - fy) + (h(x0, y0 + 1) * (1 - fx) + h(x0 + 1, y0 + 1) * fx) * fy;
+    const s = (x, y) => decode((y * w + x) * 4);
+    return (s(x0, y0) * (1 - fx) + s(x0 + 1, y0) * fx) * (1 - fy) + (s(x0, y0 + 1) * (1 - fx) + s(x0 + 1, y0 + 1) * fx) * fy;
+  }
+
+  // surface height in meters above sea level from the data layer (0 over the ocean, lake surfaces flat)
+  at(lat, lon) {
+    if (!this.inside(lat, lon)) return 0;
+    const d = this.data;
+    return this._bilinear(d, this.w, this.h, lat, lon, i => d[i] * 256 + d[i + 1] - 6000);
+  }
+
+  // The drawn ground before the fine relief, as sampleGround() in the shader: the bilinear height with the shoreline
+  // pulled down to the lowest of the four texels (the water), by the smooth land fraction.
+  ground(lat, lon) {
+    if (!this.inside(lat, lon)) return { h: 0, coast: 0 };
+    const d = this.data, w = this.w, H = this.h;
+    const u = (lon - this.lon0) / (this.lon1 - this.lon0) * w - 0.5;
+    const v = (this.lat1 - lat) / (this.lat1 - this.lat0) * H - 0.5;
+    const x0 = Math.max(0, Math.min(w - 2, Math.floor(u))), y0 = Math.max(0, Math.min(H - 2, Math.floor(v)));
+    const fx = Math.min(1, Math.max(0, u - x0)), fy = Math.min(1, Math.max(0, v - y0));
+    const s = (x, y) => { const i = (y * w + x) * 4; return d[i] * 256 + d[i + 1] - 6000; };
+    const a = s(x0, y0), b = s(x0 + 1, y0), c = s(x0, y0 + 1), e = s(x0 + 1, y0 + 1);
+    const hb = (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + e * fx) * fy;
+    const coast = this.land(lat, lon), wl = Math.min(a, b, c, e);
+    return { h: wl + (hb - wl) * smoothstep(0.42, 0.8, coast), coast, water: wl };
+  }
+
+  // solid-ground fraction 0..1 (smooth across the shoreline); 0 outside the mapped window
+  land(lat, lon) {
+    if (!this.coast || !this.inside(lat, lon)) return 0;
+    const d = this.coast;
+    return this._bilinear(d, this.cw, this.ch, lat, lon, i => d[i] / 255);
+  }
+
+  // nearest mask texel: biome index, water depth (m), protected sea 0..1
+  sample(lat, lon) {
+    if (!this.mask || !this.inside(lat, lon)) return { biome: 0, depth: 5200, inner: 0 };
+    const x = Math.min(this.mw - 1, Math.max(0, Math.floor((lon - this.lon0) / (this.lon1 - this.lon0) * this.mw)));
+    const y = Math.min(this.mh - 1, Math.max(0, Math.floor((this.lat1 - lat) / (this.lat1 - this.lat0) * this.mh)));
+    const i = (y * this.mw + x) * 4, m = this.mask;
+    return { biome: m[i + 2], depth: m[i] / 255 * 5500, inner: m[i + 1] / 255 };
   }
 }
+
+// Fractal relief below the data resolution, the same function as detail() in the terrain shader.
+// n = unit direction, h = data height (m), landW = 0..1 how far inland, fade = distance fade 0..1.
+export function detailAt(nx, ny, nz, h, landW, fade) {
+  if (fade <= 0 || landW <= 0) return 0;
+  const rugged = smoothstep(700, 2600, h);
+  const ridge = 1 - Math.abs(vnoise(nx * 425, ny * 425, nz * 425) * 2 - 1);
+  const d = (ridge - 0.5) * 220 * rugged
+          + (vnoise(nx * 2000, ny * 2000, nz * 2000) - 0.5) * (40 + 60 * rugged)
+          + (vnoise(nx * 8000, ny * 8000, nz * 8000) - 0.5) * (14 + 16 * rugged)
+          + (vnoise(nx * 32000, ny * 32000, nz * 32000) - 0.5) * 8
+          + (vnoise(nx * 128000, ny * 128000, nz * 128000) - 0.5) * 2.5;
+  return d * fade * landW;
+}
+
+// distance fade of the fine relief: full within 0.03 planet radii of the camera, gone by 0.12
+export const detailFade = distUnits => 1 - smoothstep(0.03, 0.12, distUnits);
+export const landWeight = coastFrac => smoothstep(0.5, 0.92, coastFrac);
+
+export function smoothstep(a, b, x) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }

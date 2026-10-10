@@ -1,0 +1,57 @@
+// Named places for navigation and the workshop. Names come from the sources (the Drive description, the spec and
+// the older labeled maps); nothing here is drawn into the world itself. Each view is where the camera goes:
+// lat, lon (deg), alt (m above ground), heading (deg from north), pitch (deg, null = automatic), mode.
+// `evidence` cites where the name and the character come from; `status` says how settled the place is.
+
+export const PLACES = [
+  { id: 'orbit', name: 'Orbit, the whole cluster', kind: 'overview',
+    view: { lat: 32, lon: -4, alt: 4.4e6, heading: 0, pitch: -90, mode: 'orbit' },
+    evidence: 'Drive description, World Overview: the mapped landmasses are the only land; everything else is open ocean.',
+    status: 'canon' },
+  { id: 'veir', name: 'Lake Veir and the Veir Mountains', kind: 'lake',
+    view: { lat: 46, lon: -28, alt: 420e3, heading: 0, pitch: null, mode: 'orbit' },
+    evidence: 'Drive description, Fiira and Major Lakes: Rockies-like range enclosing a Bonneville-sized basin. The Oct 10 outline (kiros_earth_re.png) draws a much smaller lake south of a single diagonal range: see the workshop comparison.',
+    status: 'disputed' },
+  { id: 'veir-ground', name: 'Veir shoreline', kind: 'shore',
+    view: { lat: 47.9, lon: -25.05, alt: 1800, heading: 215, pitch: -14, mode: 'orbit' },
+    evidence: 'Built from the September penup lake outline (Lake Veir surface 1,552 m, derived from Bonneville).',
+    status: 'derived' },
+  { id: 'sfere', name: 'Sfere and the Roan ranges', kind: 'lake',
+    view: { lat: 47.4, lon: 21.8, alt: 300e3, heading: 0, pitch: null, mode: 'orbit' },
+    evidence: 'Drive description, Roan: fragmented volcanic ranges near Sfere, no marked volcano.',
+    status: 'canon' },
+  { id: 'dire', name: 'Dire Lake basin', kind: 'lake',
+    view: { lat: 15.4, lon: 32.9, alt: 260e3, heading: 0, pitch: null, mode: 'orbit' },
+    evidence: 'Drive description, Malos: basin center below sea level with an inner depression. The Oct 10 outline drops the inner loop and draws a smaller lake.',
+    status: 'disputed' },
+  { id: 'malos-wet', name: 'Malos east wetlands', kind: 'wetland',
+    view: { lat: 12.2, lon: 45.35, alt: 2500, heading: 40, pitch: -16, mode: 'orbit' },
+    evidence: 'Drive description, Malos and Wetlands: flat humid country east of the Spine, swamps and bayous (purple zone on kiros_v5).',
+    status: 'canon' },
+  { id: 'dragon', name: 'Dragon Islands volcano', kind: 'volcano',
+    view: { lat: 11, lon: -24.13, alt: 60e3, heading: 0, pitch: null, mode: 'orbit' },
+    evidence: 'Drive description, Dragon Islands: spiral volcanic archipelago with one dominant central volcano.',
+    status: 'canon' },
+  { id: 'create', name: 'Create and the break zone', kind: 'coast',
+    view: { lat: 27, lon: 12, alt: 300e3, heading: 0, pitch: null, mode: 'orbit' },
+    evidence: 'Drive description, Create: largest surviving landmass in the central break zone, complex drowned coasts.',
+    status: 'canon' },
+  { id: 'ender', name: 'Ender', kind: 'forest',
+    view: { lat: 24.35, lon: -51.5, alt: 3000, heading: 320, pitch: -14, mode: 'orbit' },
+    evidence: 'Drive description, Ender: low to moderate land, temperate mixed forest north, tropical south.',
+    status: 'canon' },
+  { id: 'inner-sea', name: 'Protected inner sea between Fiira and Roan', kind: 'sea',
+    view: { lat: 33, lon: -5, alt: 180e3, heading: 0, pitch: null, mode: 'orbit' },
+    evidence: 'Drive description, Continental History and Water: shallow pale water the gods keep free of monsters.',
+    status: 'canon' },
+  { id: 'outer', name: 'Outer ocean, west of Ender', kind: 'sea',
+    view: { lat: 20, lon: -70, alt: 1200, heading: 270, pitch: -8, mode: 'orbit' },
+    evidence: 'Drive description: the outer ocean is deeper, darker and dangerous; dragons hunt over it.',
+    status: 'canon' },
+  { id: 'north', name: 'Northern islands and the Ice Sea', kind: 'islands',
+    view: { lat: 62, lon: 20, alt: 500e3, heading: 0, pitch: null, mode: 'orbit' },
+    evidence: 'Drive description, Northern Islands: cold rocky belt; Icaia/Icala and Jerr Islands on older maps. Ice Sea is an older-map name.',
+    status: 'older-map name' }
+];
+
+export const placeById = id => PLACES.find(p => p.id === id);

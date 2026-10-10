@@ -42,21 +42,14 @@
     <label><input id="detail" type="checkbox" checked> Fine detail</label>
   </div>
 
-  <div class="row"><label for="goto">Fly to</label>
-    <select id="goto">
-      <option value="">—</option>
-      <option value="orbit">Orbit, whole cluster</option>
-      <option value="veir">Lake Veir and the Veir Mountains</option>
-      <option value="veir-ground">Veir shoreline, 2 km up</option>
-      <option value="sfere">Sfere and the Roan ranges</option>
-      <option value="dire">Dire Lake basin</option>
-      <option value="malos-wet">Malos east wetlands</option>
-      <option value="dragon">Dragon Islands volcano</option>
-      <option value="create">Create and the break zone</option>
-      <option value="ender">Ender</option>
-      <option value="inner-sea">Inner sea between Fiira and Roan</option>
-      <option value="outer">Outer ocean, west of Ender</option>
-      <option value="north">Northern islands and the Ice Sea</option>
+  <div class="row"><label for="goto">Go to</label>
+    <select id="goto"><option value="">—</option></select>
+  </div>
+  <div class="row"><label for="quality">Quality</label>
+    <select id="quality">
+      <option value="0.6">Fast</option>
+      <option value="1">Balanced</option>
+      <option value="1.35">Fine</option>
     </select>
   </div>
 
@@ -64,6 +57,44 @@
 </section>
 
 <aside class="hud" id="hud" aria-live="off"></aside>
+
+<nav class="modes" aria-label="Movement mode">
+  <button id="m-survey" aria-pressed="true" title="Survey from above (M)">Survey <kbd>M</kbd></button>
+  <button id="m-walk" aria-pressed="false" title="Walk on the ground at the middle of the screen (G)">Walk <kbd>G</kbd></button>
+  <button id="m-fly" aria-pressed="false" title="Fly (V)">Fly <kbd>V</kbd></button>
+  <button id="m-help" title="Controls and help (H)">Help <kbd>H</kbd></button>
+  <button id="m-reset" title="Back to orbit (Home)">Reset</button>
+</nav>
+
+<div class="hint" id="hint" hidden></div>
+
+<div class="pad" id="pad" hidden aria-label="On-screen movement">
+  <button data-k="forward" aria-label="Forward">▲</button>
+  <button data-k="left" aria-label="Left">◀</button>
+  <button data-k="back" aria-label="Back">▼</button>
+  <button data-k="right" aria-label="Right">▶</button>
+  <button data-k="up" aria-label="Up or jump">⤒</button>
+  <button data-k="down" aria-label="Down">⤓</button>
+  <button data-k="run" aria-label="Run or boost">»</button>
+</div>
+
+<dialog id="help" aria-labelledby="help-title">
+  <h2 id="help-title">Moving around Kiros</h2>
+  <div class="help-cols">
+    <section><h3>Survey <kbd>M</kbd></h3>
+      <p>Drag to move the ground. Wheel or pinch to descend. Right-drag or Shift-drag to turn and tilt. Keys: WASD/arrows pan, <kbd>+</kbd>/<kbd>−</kbd> height, <kbd>Q</kbd>/<kbd>E</kbd> turn, <kbd>R</kbd>/<kbd>F</kbd> tilt.</p></section>
+    <section><h3>Walk <kbd>G</kbd></h3>
+      <p>Lands you where the middle of the screen points. <kbd>W A S D</kbd> walk, arrows turn, <kbd>Shift</kbd> run, <kbd>Space</kbd> jump (the small world has about a quarter of Earth's gravity). Wading slows you down.</p></section>
+    <section><h3>Fly <kbd>V</kbd></h3>
+      <p><kbd>W A S D</kbd> along the view, <kbd>Space</kbd>/<kbd>E</kbd> up, <kbd>C</kbd>/<kbd>Q</kbd> down, <kbd>Shift</kbd> boost. You go faster the higher you are.</p></section>
+    <section><h3>Looking and speed</h3>
+      <p>Click the view to capture the mouse; <kbd>Esc</kbd> releases it. Without capture, drag to look. Wheel or <kbd>[</kbd> <kbd>]</kbd> change speed. On touch screens use the on-screen pad.</p></section>
+    <section><h3>Anywhere</h3>
+      <p><kbd>Home</kbd> or Reset returns to orbit. <kbd>J</kbd> opens the workshop: sources, comparisons, notes and bookmarks.</p></section>
+  </div>
+  <p class="note">The ground is the September penup master. Trees, rocks and the fine relief below about 1 km are generated, not drawn by Kayden. No towns, roads, labels or people anywhere.</p>
+  <form method="dialog"><button>Close</button></form>
+</dialog>
 
 <footer class="credit"><a href="https://github.com/KaydenClark/eredent_site" rel="noopener">source</a> · built from the Kiros World Build Spec</footer>
 

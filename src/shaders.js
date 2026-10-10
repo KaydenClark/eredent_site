@@ -1,131 +1,173 @@
 import { GLSL_GEO } from './geo.js';
+import { GLSL_NOISE } from './noise.js';
 
-export const GLSL_NOISE = /* glsl */`
-float hash3(vec3 p) { p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
-float vnoise(vec3 p) {
-  vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
-             mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), f.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
-}
-`;
+export { GLSL_NOISE };
 
-// Shared by vertex and fragment: window lookup and 16-bit height decode.
+// Shared by vertex and fragment: window lookup and the layer decodes. Every sample is taken at texel centers and
+// blended by hand, so the CPU copy in heightfield.js reproduces it exactly.
 export const GLSL_LAYERS = /* glsl */`
 uniform sampler2D uHeight; uniform vec2 uHeightSize;
+uniform sampler2D uCoast; uniform vec2 uCoastSize;
 uniform vec4 uWindow;          // lon0, lat0, lon1, lat1 (deg)
 uniform float uRadiusM;        // planet radius in meters (scene unit = 1 radius)
 
 vec2 windowUv(vec2 ll) { return vec2((ll.y - uWindow.x) / (uWindow.z - uWindow.x), (ll.x - uWindow.y) / (uWindow.w - uWindow.y)); }
 float inWindow(vec2 uv) { vec2 d = step(vec2(0.0), uv) * step(uv, vec2(1.0)); return d.x * d.y; }
 float decodeH(vec2 uv) { vec4 t = texture2D(uHeight, uv); return floor(t.r * 255.0 + 0.5) * 256.0 + floor(t.g * 255.0 + 0.5) - 6000.0; }
-float sampleH(vec2 uv) {
+float decodeC(vec2 uv) { return floor(texture2D(uCoast, uv).r * 255.0 + 0.5) / 255.0; }
+// height with the shoreline pulled down to the water: h00..h11 are the four texels, wl the lowest of them
+float sampleGround(vec2 uv, out float coast) {
   vec2 s = uv * uHeightSize - 0.5; vec2 i = floor(s); vec2 f = s - i; vec2 o = 1.0 / uHeightSize; vec2 b = (i + 0.5) * o;
-  return mix(mix(decodeH(b), decodeH(b + vec2(o.x, 0.0)), f.x), mix(decodeH(b + vec2(0.0, o.y)), decodeH(b + o), f.x), f.y);
+  float a = decodeH(b), bb = decodeH(b + vec2(o.x, 0.0)), c = decodeH(b + vec2(0.0, o.y)), d = decodeH(b + o);
+  float hb = mix(mix(a, bb, f.x), mix(c, d, f.x), f.y);
+  vec2 sc = uv * uCoastSize - 0.5; vec2 ic = floor(sc); vec2 fc = sc - ic; vec2 oc = 1.0 / uCoastSize; vec2 bc = (ic + 0.5) * oc;
+  coast = mix(mix(decodeC(bc), decodeC(bc + vec2(oc.x, 0.0)), fc.x), mix(decodeC(bc + vec2(0.0, oc.y)), decodeC(bc + oc), fc.x), fc.y);
+  float wl = min(min(a, bb), min(c, d));
+  return wl + (hb - wl) * smoothstep(0.42, 0.8, coast);
+}
+`;
+
+// Exponential height fog standing in for aerial perspective below ~30 km; above that the atmosphere shell does it.
+export const GLSL_FOG = /* glsl */`
+uniform vec3 uFogSun, uFogAway;   // horizon sky radiance toward the sun's azimuth and away from it (pre-exposure)
+uniform float uFogDensity;        // extinction at sea level, per meter (0 = off)
+uniform float uFogHeight;         // scale height, m
+uniform float uCamAltM;           // camera height above sea level, m
+uniform vec3 uSunDirF;
+vec3 applyFog(vec3 col, vec3 toPoint, float pointAltM, float radiusM) {
+  if (uFogDensity <= 0.0) return col;
+  float dist = length(toPoint) * radiusM;
+  float h0 = max(uCamAltM, -500.0), dh = pointAltM - h0, H = uFogHeight;
+  float k = abs(dh) > 1.0 ? (exp(-h0 / H) - exp(-(h0 + dh) / H)) * H / dh : exp(-h0 / H);
+  float f = 1.0 - exp(-uFogDensity * dist * k);
+  vec3 v = toPoint / max(length(toPoint), 1e-20);
+  float s = 0.5 + 0.5 * dot(v, uSunDirF);
+  vec3 fc = mix(uFogAway, uFogSun, smoothstep(0.0, 1.0, s * s));
+  return mix(col, fc, f);
 }
 `;
 
 export const TERRAIN_VERT = /* glsl */`
-precision highp float;
+precision highp float; precision highp int;
 attribute vec2 aGrid; attribute float aSkirt;
 attribute vec4 aTile;          // u0, v0, size, depth   (instance)
 attribute float aFace;         // cube face             (instance)
-uniform float uRelief, uDetail, uGridN;
-uniform sampler2D uMask;
-varying vec3 vNormal, vWorld, vSphere; varying vec2 vUvW; varying float vIn, vDepth, vAlt;
+attribute vec3 aC, aJu, aJv, aHuu, aHuv, aHvv;   // deep tiles: center relative to the origin, Taylor terms (instance)
+uniform float uRelief, uDetail, uGridN, uDeep;
+uniform vec3 uOrigin;          // unit direction of the local origin; the mesh is placed there
+uniform vec3 uCamLocal;        // camera position relative to the origin
+varying vec3 vNormal, vSphere, vView; varying vec2 vUvW; varying float vIn, vDepth, vAlt, vCoast;
 #include <common>
 #include <logdepthbuf_pars_vertex>
 ${GLSL_GEO}
 ${GLSL_NOISE}
 ${GLSL_LAYERS}
 
-// no clamp here: neighbour samples just past the tile edge keep the normals continuous across tiles
-vec3 tileDir(vec2 g) { vec2 st = aTile.xy + g * aTile.z; return normalize(spherify(cubePoint(aFace, st * 2.0 - 1.0))); }
+// Direction to a grid point, relative to the origin. Deep (small, near) tiles use a second-order expansion about
+// their center computed on the CPU in double precision, so nothing near the camera is ever the small difference of
+// two numbers near 1. Coarse tiles are far away and use the exact cube-to-sphere mapping.
+vec3 tileRel(vec2 g) {
+  if (aTile.w >= uDeep) {
+    vec2 d = (g - 0.5) * aTile.z;
+    return aC + aJu * d.x + aJv * d.y + 0.5 * aHuu * d.x * d.x + aHuv * d.x * d.y + 0.5 * aHvv * d.y * d.y;
+  }
+  vec2 st = aTile.xy + g * aTile.z;
+  return normalize(spherify(cubePoint(aFace, st * 2.0 - 1.0))) - uOrigin;
+}
 
-// fractal relief below the data resolution: ~4 km, 850 m, 210 m and 53 m wavelengths on the small world. Land only.
-// Faded by distance to the camera (continuous across tile edges), never by tile level.
-float detail(vec3 n, float h, float land, float fade) {
-  if (fade <= 0.0 || land < 0.5) return 0.0;
-  float rugged = smoothstep(700.0, 2600.0, h);                      // the ranges are broken ground, the lowlands gentle
-  float ridge = 1.0 - abs(vnoise(n * 425.0) * 2.0 - 1.0);           // ridged, for the mountains
+// fractal relief below the data resolution (same function as detailAt() in heightfield.js)
+float detail(vec3 n, float h, float landW, float fade) {
+  if (fade <= 0.0 || landW <= 0.0) return 0.0;
+  float rugged = smoothstep(700.0, 2600.0, h);
+  float ridge = 1.0 - abs(vnoise(n * 425.0) * 2.0 - 1.0);
   float d = (ridge - 0.5) * 220.0 * rugged
           + (vnoise(n * 2000.0) - 0.5) * (40.0 + 60.0 * rugged)
           + (vnoise(n * 8000.0) - 0.5) * (14.0 + 16.0 * rugged)
-          + (vnoise(n * 32000.0) - 0.5) * 8.0;
-  return d * fade * uDetail;
+          + (vnoise(n * 32000.0) - 0.5) * 8.0
+          + (vnoise(n * 128000.0) - 0.5) * 2.5;
+  return d * fade * landW * uDetail;
 }
 
-vec3 surfacePoint(vec2 g, out float h, out vec2 uvW, out float inW) {
-  vec3 n = tileDir(g);
-  uvW = windowUv(latLon(n)); inW = inWindow(uvW);
-  h = inW > 0.5 ? sampleH(uvW) : 0.0;
-  float land = inW > 0.5 ? texture2D(uMask, uvW).b * 255.0 : 0.0;   // biome index: 0 ocean, 4 lake
-  land = (land > 0.5 && abs(land - 4.0) > 0.5) ? 1.0 : 0.0;
-  float dcam = distance(cameraPosition, n * (1.0 + h / uRadiusM * uRelief));
-  float fade = 1.0 - smoothstep(0.03, 0.12, dcam);                 // full detail within ~50 km, gone by ~200 km (small world)
-  h += detail(n, h, land, fade);
-  return n * (1.0 + h / uRadiusM * uRelief);
+vec3 surfacePoint(vec2 g, out float h, out vec2 uvW, out float inW, out float coast, out vec3 nAbs) {
+  vec3 r = tileRel(g);
+  nAbs = normalize(uOrigin + r);
+  uvW = windowUv(latLon(nAbs)); inW = inWindow(uvW);
+  coast = 0.0; h = 0.0;
+  if (inW > 0.5) h = sampleGround(uvW, coast);
+  float hs0 = h / uRadiusM * uRelief;
+  float dcam = distance(uCamLocal, r * (1.0 + hs0) + uOrigin * hs0);
+  float fade = 1.0 - smoothstep(0.03, 0.12, dcam);
+  h += detail(nAbs, h, smoothstep(0.5, 0.92, coast), fade);
+  float hs = h / uRadiusM * uRelief;
+  return r * (1.0 + hs) + uOrigin * hs;
 }
 
 void main() {
   float e = 1.0 / uGridN;
-  float h, h1, h2; vec2 uvW, t1, t2; float inW, i1, i2;
+  float h, h1, h2, inW, i1, i2, coast, c1, c2; vec2 uvW, t1, t2; vec3 n, n1, n2;
   vec2 g = aSkirt > 0.5 ? clamp(aGrid, 0.0, 1.0) : aGrid;        // skirt vertices sit on the edge, then drop
-  vec3 p = surfacePoint(g, h, uvW, inW);
-  vec3 p1 = surfacePoint(g + vec2(e, 0.0), h1, t1, i1);
-  vec3 p2 = surfacePoint(g + vec2(0.0, e), h2, t2, i2);
-  vec3 n = normalize(p);
+  vec3 p = surfacePoint(g, h, uvW, inW, coast, n);
+  vec3 p1 = surfacePoint(g + vec2(e, 0.0), h1, t1, i1, c1, n1);
+  vec3 p2 = surfacePoint(g + vec2(0.0, e), h2, t2, i2, c2, n2);
   vec3 N = normalize(cross(p1 - p, p2 - p));
   if (dot(N, n) < 0.0) N = -N;
   if (aSkirt > 0.5) p -= n * (aTile.z * 0.04);     // skirts hide the hairline cracks between LOD levels
-  vNormal = N; vSphere = n; vUvW = uvW; vIn = inW; vDepth = aTile.w; vAlt = h;
-  vec4 w = modelMatrix * vec4(p, 1.0); vWorld = w.xyz;
-  gl_Position = projectionMatrix * viewMatrix * w;
+  vNormal = N; vSphere = n; vUvW = uvW; vIn = inW; vDepth = aTile.w; vAlt = h; vCoast = coast;
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  vView = (vec4(mv.xyz, 0.0) * viewMatrix).xyz;    // camera -> point, world orientation, full precision
+  gl_Position = projectionMatrix * mv;
   #include <logdepthbuf_vertex>
 }
 `;
 
 export const TERRAIN_FRAG = /* glsl */`
-precision highp float;
-uniform sampler2D uColor, uMask, uCoast;
+precision highp float; precision highp int;
+uniform sampler2D uColor, uMask, uCoastL;
 uniform vec3 uSunDir, uSunColor, uAbyss;
 uniform vec3 uMoonDir[2]; uniform float uMoonLight[2];
-uniform float uTime, uExposure;
-varying vec3 vNormal, vWorld, vSphere; varying vec2 vUvW; varying float vIn, vDepth, vAlt;
+uniform float uTime, uExposure, uRadiusM, uFloorDist;
+uniform vec4 uWindowF;
+varying vec3 vNormal, vSphere, vView; varying vec2 vUvW; varying float vIn, vDepth, vAlt, vCoast;
 #include <common>
 #include <logdepthbuf_pars_fragment>
 ${GLSL_NOISE}
+${GLSL_FOG}
 
 vec3 tonemap(vec3 c) { c *= uExposure; return c / (1.0 + c); }
 
 void main() {
   #include <logdepthbuf_fragment>
   vec3 n = normalize(vSphere); vec3 N = normalize(vNormal);
-  vec3 V = normalize(cameraPosition - vWorld);
+  vec3 V = -normalize(vView);
+  float distM = length(vView) * uRadiusM;
   vec3 base = uAbyss; float biome = 0.0, depth = 5200.0, inner = 0.0;
   if (vIn > 0.5) {
     base = texture2D(uColor, vUvW).rgb;
     vec4 m = texture2D(uMask, vUvW);
     depth = m.r * 5500.0; inner = m.g; biome = floor(m.b * 255.0 + 0.5);
   }
-  bool water = biome < 0.5 || abs(biome - 4.0) < 0.5;
-  // water fraction across the four nearest mask texels, so coasts do not step from texel to texel
-  float wf = vIn > 0.5 ? 1.0 - texture2D(uCoast, vUvW).r : 1.0;   // softened land fraction: a smooth shoreline
+  bool lake = abs(biome - 4.0) < 0.5;
+  // the shoreline: the smooth land fraction, roughened by noise once it is close enough to matter
+  float closeK = 1.0 - smoothstep(2000.0, 12000.0, distM);
+  float rough = (vnoise(vSphere * 60000.0) - 0.5) * 0.10 + (vnoise(vSphere * 400000.0) - 0.5) * 0.05;
+  float cf = vIn > 0.5 ? texture2D(uCoastL, vUvW).r + rough * closeK : 0.0;
+  float wf = 1.0 - smoothstep(0.44, 0.5 + 0.06 * (1.0 - closeK), cf);
   float sunUp = dot(n, uSunDir);                              // -1 night .. 1 noon, by the sphere normal
   float day = smoothstep(-0.12, 0.25, sunUp);
+  float near = clamp((vDepth - 5.0) / 3.0, 0.0, 1.0);
 
-  vec3 col, colLand, colWater;
+  vec3 colLand, colWater;
   {
-    // small procedural ripple so the surface catches the sun; stronger swell on the deep outer ocean (canon: hostile)
     // calm inside the protected seas and lakes, long heavy swell on the deep outer ocean (canon)
-    bool lake = abs(biome - 4.0) < 0.5;
-    float swell = (lake || inner > 0.5) ? 0.022 : mix(0.03, 0.075, smoothstep(150.0, 1500.0, depth));
+    float swell = (lake || inner > 0.5) ? 0.03 : mix(0.04, 0.09, smoothstep(150.0, 1500.0, depth));
     vec3 nn = n;
-    float near = clamp((vDepth - 5.0) / 3.0, 0.0, 1.0);
     if (near > 0.0) {
-      vec3 q1 = vSphere * 15000.0 + vec3(uTime * 0.05, uTime * 0.03, 0.0);    // ~110 m waves
-      vec3 q2 = vSphere * 110000.0 + vec3(-uTime * 0.25, uTime * 0.2, 0.0);   // ~15 m ripple
-      vec2 w = (vec2(vnoise(q1), vnoise(q1 + 3.7)) - 0.5) * 2.0 + (vec2(vnoise(q2), vnoise(q2 + 5.1)) - 0.5) * 0.8;
       vec3 ex = normalize(cross(vec3(0.0, 1.0, 0.0), n)); vec3 ey = cross(n, ex);   // tangent plane
+      vec3 q1 = vSphere * 15000.0 + vec3(uTime * 0.05, uTime * 0.03, 0.0);    // long waves
+      vec3 q2 = vSphere * 110000.0 + vec3(-uTime * 0.25, uTime * 0.2, 0.0);   // chop
+      vec3 q3 = vSphere * 700000.0 + vec3(uTime * 0.9, -uTime * 0.7, uTime * 0.4); // ripples, only up close
+      vec2 w = (vec2(vnoise(q1), vnoise(q1 + 3.7)) - 0.5) * 2.0 + (vec2(vnoise(q2), vnoise(q2 + 5.1)) - 0.5) * 0.8;
+      w += (vec2(vnoise(q3), vnoise(q3 + 9.3)) - 0.5) * 0.6 * (1.0 - smoothstep(30.0, 400.0, distM));
       nn = normalize(n + (ex * w.x + ey * w.y) * swell * near);
     }
     float fres = pow(1.0 - max(dot(nn, V), 0.0), 5.0);
@@ -133,34 +175,67 @@ void main() {
     float spec = pow(max(dot(R, V), 0.0), mix(600.0, 90.0, 1.0 - inner)) * mix(0.9, 0.45, 1.0 - inner);
     vec3 skyTint = mix(vec3(0.05, 0.09, 0.16), vec3(0.35, 0.55, 0.85), day);
     float diff = max(dot(nn, uSunDir), 0.0);
-    colWater = base * (0.04 + 0.96 * diff) * uSunColor + skyTint * (0.08 + 0.35 * fres) * day + uSunColor * spec * day * 1.6;
+    // shallow water near the shore shows the bottom (pale, warmer); foam where waves meet the land
+    float shallow = smoothstep(0.25, 0.46, cf) * (lake ? 0.4 : 1.0);
+    vec3 wbase = mix(base, base * vec3(1.25, 1.3, 1.05) + vec3(0.03, 0.05, 0.03), shallow * 0.8);
+    colWater = wbase * (0.04 + 0.96 * diff) * uSunColor + skyTint * (0.08 + 0.55 * fres) * day + uSunColor * spec * day * 1.6;
+    float foamBand = smoothstep(0.34, 0.44, cf) * (1.0 - smoothstep(0.44, 0.5, cf));
+    float surf = vnoise(vSphere * 260000.0 + vec3(uTime * 0.4, 0.0, -uTime * 0.3));
+    float foam = foamBand * smoothstep(0.35, 0.75, surf + 0.25 * sin(uTime * 1.3 + cf * 40.0)) * (lake || inner > 0.5 ? 0.45 : 0.9) * closeK;
+    colWater = mix(colWater, vec3(0.85, 0.88, 0.86) * (0.15 + 0.85 * diff) * uSunColor + skyTint * 0.2, foam);
   }
   {
     // below the data resolution: canopy and ground texture so the land does not turn into a flat smear when close
-    float near = clamp((vDepth - 6.0) / 4.0, 0.0, 1.0);
-    if (near > 0.0) {
-      // the two coarser octaves use the sphere position (seamless across cube faces); only the finest uses face coordinates
+    float nearL = clamp((vDepth - 6.0) / 4.0, 0.0, 1.0);
+    float bright = dot(base, vec3(0.33));
+    if (nearL > 0.0) {
       vec3 q1 = vSphere * 9000.0, q2 = vSphere * 54000.0, q3 = vSphere * 250000.0;
       float m1 = vnoise(q1), m2 = vnoise(q2), m3 = vnoise(q3);
-      float bright = dot(base, vec3(0.33));
       float amp = (abs(biome - 2.0) < 0.5) ? 0.22 : 0.55;              // desert sand is smoother than canopy
       amp *= 1.0 - smoothstep(0.45, 0.75, bright);                     // snow and bare rock stay smooth
       float tex = 1.0 + amp * ((m1 - 0.5) * 0.9 + (m2 - 0.5) * 1.1 + (m3 - 0.5) * 0.6);
-      base *= mix(1.0, tex, near);
-      float clearing = smoothstep(0.62, 0.72, m1 * 0.6 + m2 * 0.4) * (1.0 - amp) * near;   // proposed: natural clearings
+      base *= mix(1.0, tex, nearL);
+      float clearing = smoothstep(0.62, 0.72, m1 * 0.6 + m2 * 0.4) * (1.0 - amp) * nearL;   // proposed: natural clearings
       base = mix(base, base * vec3(1.25, 1.2, 0.85), clearing * 0.5);
     }
-    float diff = max(dot(N, uSunDir), 0.0);
-    float sky = 0.5 + 0.5 * dot(N, n);                        // slopes facing the sky get more of it
+    // close to the camera the ground is seen from under the trees: forest floor, moss and litter, not canopy
+    bool forest = abs(biome - 1.0) < 0.5 || abs(biome - 3.0) < 0.5 || abs(biome - 6.0) < 0.5;
+    float under = (forest && bright < 0.45) ? 1.0 - smoothstep(uFloorDist * 0.6, uFloorDist, distM) : 0.0;
+    // meadows and clearings: the same noise the vegetation uses to thin its big trees (vegetation.js)
+    vec2 llDeg = vec2(uWindowF.y + vUvW.y * (uWindowF.w - uWindowF.y), uWindowF.x + vUvW.x * (uWindowF.z - uWindowF.x));
+    float meadow = under > 0.0 ? smoothstep(0.645, 0.675, vnoise(vec3(llDeg.x * 900.0, llDeg.y * 900.0, 7.7))) : 0.0;
+    float shade = 0.0;
+    if (under > 0.0) {
+      float m = vnoise(vSphere * 900000.0), m2 = vnoise(vSphere * 150000.0);
+      vec3 moss = vec3(0.07, 0.10, 0.04), litter = vec3(0.12, 0.085, 0.05), wet = vec3(0.05, 0.07, 0.045);
+      vec3 floorC = mix(mix(moss, litter, smoothstep(0.35, 0.7, m)), wet, abs(biome - 3.0) < 0.5 || abs(biome - 6.0) < 0.5 ? 0.6 : 0.0);
+      floorC *= 0.8 + 0.4 * m2;
+      vec3 grassC = mix(vec3(0.09, 0.13, 0.045), vec3(0.15, 0.15, 0.07), m) * (0.8 + 0.4 * m2);
+      base = mix(base, mix(floorC, grassC, meadow), under);
+      // the canopy takes most of the direct sun; a few sun flecks get through
+      float fleck = smoothstep(0.62, 0.8, vnoise(vSphere * 2400000.0 * 0.25));
+      shade = under * (1.0 - meadow) * (0.72 - 0.5 * fleck);
+    }
+    // a narrow beach or rocky strand on the land side of the shoreline
+    float strand = smoothstep(0.46, 0.5, cf) * (1.0 - smoothstep(0.5, 0.6, cf)) * closeK;
+    vec3 sand = (vSphere.y < 0.5 && !lake) ? vec3(0.62, 0.56, 0.42) : vec3(0.36, 0.35, 0.33);
+    base = mix(base, sand * (0.85 + 0.3 * vnoise(vSphere * 1500000.0)), strand * 0.85);
+    // steep ground sheds soil: rock on cliffs and gullies
+    float slope = 1.0 - dot(N, n);
+    float rock = smoothstep(0.25, 0.45, slope) * nearL;
+    base = mix(base, vec3(0.30, 0.29, 0.27) * (0.8 + 0.4 * vnoise(vSphere * 300000.0)), rock * 0.8);
+    float diff = max(dot(N, uSunDir), 0.0) * (1.0 - shade);
+    float sky = (0.5 + 0.5 * dot(N, n)) * (1.0 - shade * 0.6);   // slopes facing the sky get more of it
     vec3 skyLight = mix(vec3(0.02, 0.03, 0.06), vec3(0.22, 0.30, 0.42), day) * sky;
     colLand = base * (diff * uSunColor * 1.15 + skyLight);
   }
-  col = mix(colLand, colWater, wf);
+  vec3 col = mix(colLand, colWater, wf);
   // two moons: faint silver fill on the night side, by phase and height (canon: nights can be bright, double shadows)
   for (int i = 0; i < 2; i++) {
     float md = max(dot(N, uMoonDir[i]), 0.0) * max(dot(n, uMoonDir[i]), 0.0);
     col += base * md * uMoonLight[i] * vec3(0.55, 0.62, 0.75) * (1.0 - day);
   }
+  col = applyFog(col, vView, max(vAlt, 0.0), uRadiusM);
   gl_FragColor = vec4(tonemap(col), 1.0);
   #include <colorspace_fragment>
 }

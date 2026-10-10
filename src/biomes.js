@@ -1,0 +1,46 @@
+// Biome bands from docs/SPEC.md "Biomes and vegetation" (bands and canopy heights are Proposed there) and the
+// biome map zones (desert yellow, wetland purple, snow hatch grey). Shared by the HUD and the vegetation.
+
+// snowline (m) by latitude, spec table: 5,000 m at the equator, 4,000 at 30°N, 2,900 at 45°N, 1,650 at 60°N, 600 at 75°N
+const SNOW = [[0, 5000], [30, 4000], [45, 2900], [60, 1650], [75, 600], [90, 0]];
+export function snowline(lat, hatch = false) {
+  const a = Math.abs(lat);
+  for (let i = 1; i < SNOW.length; i++) if (a <= SNOW[i][0]) {
+    const [l0, h0] = SNOW[i - 1], [l1, h1] = SNOW[i];
+    return h0 + (h1 - h0) * (a - l0) / (l1 - l0) - (hatch ? 600 : 0);
+  }
+  return 0;
+}
+export const treeline = (lat, hatch) => snowline(lat, hatch) - 900;
+
+// The vegetation zone at a point: one of
+// tropical | mixed | taiga | alpine | tundra | snow | desert | wetland | bayou | water
+export function zoneAt(biome, lat, h, coast) {
+  if (coast < 0.47 || biome === 0 || biome === 4) return 'water';
+  const hatch = biome === 5;
+  const sl = snowline(lat, hatch), tl = sl - 900;
+  if (h > sl) return 'snow';
+  if (biome === 2) return 'desert';
+  if (h > tl) return Math.abs(lat) > 63 ? 'tundra' : 'alpine';
+  if (biome === 3) return 'wetland';
+  if (biome === 6) return 'bayou';
+  if (Math.abs(lat) > 63) return 'tundra';
+  if (lat < 18) return h > tl - 1400 ? 'mixed' : 'tropical';
+  if (lat < 48) return h > tl - 500 ? 'taiga' : 'mixed';
+  return 'taiga';
+}
+
+const NAMES = {
+  tropical: 'Giant tropical rainforest', mixed: 'Primeval mixed forest', taiga: 'Cold evergreen forest (taiga)',
+  alpine: 'Alpine rock and scrub', tundra: 'Tundra', snow: 'Snowfield', desert: 'Desert', wetland: 'Wetland, swamp forest',
+  bayou: 'Bayou'
+};
+
+export function biomeName(sample, lat, h, coast) {
+  const b = sample.biome;
+  const z = zoneAt(b, lat, h, coast);
+  if (z !== 'water') return NAMES[z];
+  if (b === 4) return 'Lake';
+  if (sample.inner > 0.5) return 'Protected inner sea';
+  return sample.depth > 1000 ? 'Deep outer ocean' : 'Outer shelf';
+}

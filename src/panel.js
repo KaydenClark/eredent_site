@@ -3,7 +3,10 @@ import { settings, set, PLANETS } from './settings.js';
 const $ = id => document.getElementById(id);
 const fmt = n => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
 
-export function bindPanel({ flyTo }) {
+export function bindPanel({ flyTo, places = [] }) {
+  const go = $('goto');
+  for (const p of places) { const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; go.append(o); }
+  const q = $('quality'); q.value = String(settings.quality); if (!q.value) q.value = '1'; q.onchange = () => set({ quality: +q.value });
   $('sz-small').onclick = () => set({ size: 'small' });
   $('sz-earth').onclick = () => set({ size: 'earth' });
   const hour = $('hour'); hour.value = settings.hour; hour.oninput = () => { set({ hour: +hour.value, clock: false }); $('clock').checked = false; $('hour-out').textContent = fmtHour(+hour.value); };
