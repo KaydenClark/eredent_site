@@ -209,7 +209,7 @@ const goPlace = async id => {
     const R = planet().radiusKm * 1000, D = Math.PI / 180, a = towardWater * D;
     for (let d = 0; d < 4000; d += 10) {
       const la = v.lat + Math.cos(a) * 10 / R / D, lo = v.lon + Math.sin(a) * 10 / (R * Math.cos(v.lat * D)) / D;
-      if (heightfield.land(la, lo) < 0.482) break;
+      if (heightfield.land(la, lo) < (p.strand ?? 0.482)) break;
       v.lat = la; v.lon = lo;
     }
   }

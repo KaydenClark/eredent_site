@@ -500,6 +500,8 @@ export class Vegetation {
           const rel = this.terrain.relief, hz = rel > 1e-3 ? h / rel : this.hf.ground(lat, lon).h;
           const zone = zoneAt(samp.biome, lat, hz, coast, lon);
           const Z = ZONES[zone]; if (!Z) continue;
+          // the open strand: bare sand or shingle, only the odd tuft (reeds at wetland edges are kept)
+          if (layer === 'ground' && coast < 0.66 && zone !== 'wetland' && zone !== 'bayou' && cellRand(i, j, s + 9) > 0.12) continue;
           const list = Z[layer]; if (!list || !list.length) continue;
           let dens = layer === 'trees' ? (L.density[zone] ?? 0) : (L.density?.[zone] ?? 1);
           // natural clearings and meadows (proposed in the spec): fewer big trees, more ground cover

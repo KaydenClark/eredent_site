@@ -70,7 +70,7 @@ export const SCENIC = [
   { id: 's-veir-oct10', name: 'Oct 10 Lake Veir shore (variant terrain)', kind: 'shore', zone: 'Alpine lake shore', terrain: 'oct10',
     view: { lat: 32.1, lon: -21.2, alt: 1.7, heading: 0, pitch: -3, mode: 'walk' }, face: 'water', faceOffset: 55, local: 16.5,
     evidence: 'The smaller Lake Veir drawn on kiros_earth_re.png (Oct 10), about 7,860 km² on the small world and ~440 km SSE of the September lake, built as a what-if variant (docs/oct10-variant.md). Switches the terrain source.', status: 'disputed' },
-  { id: 's-beach', name: 'Equatorial beach, southern Malos', faceOffset: 65, kind: 'shore', zone: 'Tropical coast',
+  { id: 's-beach', name: 'Equatorial beach, southern Malos', faceOffset: 40, strand: 0.58, kind: 'shore', zone: 'Tropical coast',
     view: { lat: -0.178, lon: 13.473, alt: 1.7, heading: 0, pitch: -5, mode: 'walk' }, face: 'water', local: 9.6,
     evidence: 'Spec: beaches mainly on the tropical inner seas; inner seas pale and protected (canon). This point lies about 0.2°S on the current placement (the Malos-tip latitude question).', status: 'derived' },
   { id: 's-volcano', name: 'Dragon Islands volcano rim', kind: 'volcano', zone: 'Volcanic summit',

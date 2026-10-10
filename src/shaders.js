@@ -257,6 +257,7 @@ void main() {
     // Dragon Islands cone: black rock and ash soils (spec); same box as biomes.js isVolcanic()
     float volc = (llDeg.x > 5.0 && llDeg.x < 16.0 && llDeg.y > -32.0 && llDeg.y < -15.0) ? smoothstep(1100.0, 1300.0, vAlt) : 0.0;
     under *= 1.0 - volc;
+    under *= smoothstep(0.62, 0.72, cf);                       // the strand is sand or shingle, not forest floor
     // meadows and clearings: the same noise the vegetation uses to thin its big trees (vegetation.js)
     float meadow = under > 0.0 ? smoothstep(0.645, 0.675, vnoise(vec3(llDeg.x * 900.0, llDeg.y * 900.0, 7.7))) : 0.0;
     float shade = 0.0;
@@ -272,7 +273,7 @@ void main() {
       shade = under * (1.0 - meadow) * (0.72 - 0.5 * fleck);
     }
     // a narrow beach or rocky strand on the land side of the shoreline
-    float strand = smoothstep(0.46, 0.5, cf) * (1.0 - smoothstep(0.5, 0.6, cf)) * closeK;
+    float strand = smoothstep(0.46, 0.5, cf) * (1.0 - smoothstep(0.6, 0.7, cf)) * closeK;
     vec3 sand = (vSphere.y < 0.5 && !lake) ? vec3(0.62, 0.56, 0.42) : vec3(0.36, 0.35, 0.33);
     base = mix(base, sand * (0.85 + 0.3 * vnoise(vSphere * 1500000.0)), strand * 0.85);
     // steep ground sheds soil: rock on cliffs and gullies
@@ -282,7 +283,7 @@ void main() {
     vec3 q3d = vSphere * (1.0 + vAlt / uRadiusM);
     float strata = vnoise(q3d * 300000.0) * 0.6 + vnoise(q3d * vec3(60000.0, 900000.0, 60000.0)) * 0.4;
     base = mix(base, vec3(0.31, 0.30, 0.28) * (0.72 + 0.5 * strata), rock * 0.85);
-    base = mix(base, mix(vec3(0.09, 0.085, 0.08), vec3(0.20, 0.18, 0.16), strata) * (0.85 + 0.3 * vnoise(q3d * 40000.0)), volc * nearL * 0.9);
+    base = mix(base, mix(vec3(0.045, 0.042, 0.04), vec3(0.12, 0.105, 0.095), strata) * (0.85 + 0.3 * vnoise(q3d * 40000.0)), volc * nearL * 0.9);
     // snow lies above the snowline (spec table, proposed), except on the steepest rock; drifts break its lower edge
     float drift = (vnoise(vSphere * 40000.0) - 0.5) * 220.0;
     float snowK = smoothstep(snowL - 120.0, snowL + 120.0, vAlt + drift) * (1.0 - smoothstep(0.35, 0.6, slope));
