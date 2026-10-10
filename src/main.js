@@ -63,7 +63,7 @@ try {
 }
 status.textContent = 'Reading the heights…';
 await new Promise(r => setTimeout(r, 10));
-const heightfield = new Heightfield(tex.height.image, meta.web.window_deg, tex.mask.image, tex.coast.image);
+let heightfield = new Heightfield(tex.height.image, meta.web.window_deg, tex.mask.image, tex.coast.image);
 
 // --- world -----------------------------------------------------------------------------------------------
 const terrain = new Terrain(tex, meta, heightfield); scene.add(terrain.mesh);
@@ -86,6 +86,29 @@ const vegetation = new Vegetation({ terrain, heightfield, scene, planet, quality
 const dragons = new Dragons(scene, 5);
 const hooks = { planet: [() => vegetation.clear(), p => dragons.setRadius(p.radiusKm * 1000)], frame: [] };   // later layers (vegetation, sound) register here
 export const ctx = { THREE, vegetation, scene, camera, renderer, terrain, heightfield, rig, settings, planet, hooks, sunDir: new THREE.Vector3(), tex, meta };
+
+// --- terrain source: the September penup build, or the Oct 10 revision built as a variant -------------------
+// Both stay inspectable; switching swaps the regional layers in place. Neither choice is a canon decision.
+const terrainSets = { sept: Promise.resolve({ tex, meta, hf: heightfield }) };
+ctx.terrainSource = 'sept';
+async function loadVariant(name) {
+  const dir = name + '/';
+  const m = await fetch(BASE + `data/kiros_meta_${name}.json`).then(r => { if (!r.ok) throw new Error('missing'); return r.json(); });
+  const [color, height, mask, coast] = await Promise.all([
+    loadTex(dir + 'kiros_region_color_8k.jpg', { srgb: true }), loadTex(dir + 'kiros_region_height16_4k.png', { data: true }),
+    loadTex(dir + 'kiros_region_mask_4k.png', { data: true }), loadTex(dir + 'kiros_region_coast_4k.png', { data: true })]);
+  const t = { ...tex, color, height, mask, coast };
+  return { tex: t, meta: m, hf: new Heightfield(height.image, m.web.window_deg, mask.image, coast.image) };
+}
+ctx.setTerrainSource = async name => {
+  if (!terrainSets[name]) terrainSets[name] = loadVariant(name);
+  let set;
+  try { set = await terrainSets[name]; } catch (e) { delete terrainSets[name]; throw e; }
+  heightfield = set.hf; ctx.heightfield = set.hf; terrain.hf = set.hf; vegetation.hf = set.hf;
+  terrain.setLayers(set.tex, set.meta);
+  ctx.terrainSource = name; vegetation.clear();
+  if (rig.nav) rig.setMode(rig.mode, { force: true });     // stand on the new ground
+};
 
 function applyPlanet() {
   const p = planet();
@@ -187,6 +210,20 @@ const workshop = mountWorkshop({
   onOpenChange: open => { document.body.classList.toggle('ws-open', open); if (open && document.pointerLockElement) document.exitPointerLock(); rig.keys.blur(); }
 });
 ctx.workshop = workshop;
+{
+  const a = document.getElementById('ts-sept'), b = document.getElementById('ts-oct10'), note = document.getElementById('ts-note');
+  const sync = () => { a.setAttribute('aria-pressed', String(ctx.terrainSource === 'sept')); b.setAttribute('aria-pressed', String(ctx.terrainSource === 'oct10')); };
+  const go = async name => {
+    note.hidden = false; note.textContent = 'Loading…';
+    try {
+      await ctx.setTerrainSource(name);
+      note.textContent = name === 'oct10' ? 'Showing the Oct 10 outline built as a variant: its lakes and mountain marks, the same coastline. A what-if for comparison, not a canon decision. See docs/oct10-variant.md.' : '';
+      note.hidden = name !== 'oct10';
+    } catch { note.textContent = 'The Oct 10 variant has not been built on this machine yet (public/textures/oct10/).'; }
+    sync();
+  };
+  a.onclick = () => go('sept'); b.onclick = () => go('oct10');
+}
 
 // --- lighting looks: sunrise, midday, golden hour, a night with both moons up --------------------------------
 const LOOKS = ['sunrise', 'noon', 'golden', 'moons'];

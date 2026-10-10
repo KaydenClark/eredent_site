@@ -93,6 +93,15 @@ export class Terrain {
     this.cache = new Map();
   }
 
+  // swap the regional data layers (terrain source switch)
+  setLayers(textures, meta) {
+    const u = this.material.uniforms, w = meta.web.window_deg;
+    u.uHeight.value = textures.height; u.uHeightSize.value.set(textures.height.image.width, textures.height.image.height);
+    u.uCoast.value = textures.coast; u.uCoastSize.value.set(textures.coast.image.width, textures.coast.image.height);
+    u.uCoastL.value = linearCopy(textures.coast); u.uMask.value = textures.mask; u.uColor.value = textures.color;
+    u.uWindow.value.set(w.lon[0], w.lat[0], w.lon[1], w.lat[1]); u.uWindowF.value.copy(u.uWindow.value);
+  }
+
   setRadius(km) {
     this.radiusM = km * 1000; this.material.uniforms.uRadiusM.value = this.radiusM;
     this.maxDepth = km > 3000 ? 17 : 15;            // about 2.5 m between vertices at the finest level on either planet
