@@ -13,7 +13,7 @@ export function bindPanel({ flyTo }) {
   $('relief-out').textContent = `${settings.relief}×`;
   const atmo = $('atmo'); atmo.value = settings.atmo; atmo.oninput = () => { set({ atmo: +atmo.value }); $('atmo-out').textContent = `${(+atmo.value).toFixed(1)}×`; };
   $('atmo-out').textContent = `${settings.atmo.toFixed(1)}×`;
-  for (const k of ['clock', 'clouds', 'moons', 'detail']) { const el = $(k); el.checked = settings[k]; el.onchange = () => set({ [k]: el.checked }); }
+  for (const k of ['clock', 'clouds', 'moons', 'detail', 'trees', 'creatures']) { const el = $(k); el.checked = settings[k]; el.onchange = () => set({ [k]: el.checked }); }
   $('goto').onchange = () => { flyTo($('goto').value); $('goto').value = ''; };
   const hide = $('hide'), panel = $('panel');
   hide.onclick = () => { const m = panel.classList.toggle('min'); hide.textContent = m ? 'Show' : 'Hide'; hide.setAttribute('aria-expanded', String(!m)); };

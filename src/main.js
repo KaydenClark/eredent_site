@@ -4,6 +4,9 @@ import { settings, set, onChange, planet, MOONS } from './settings.js';
 import { dir, latLon } from './geo.js';
 import { Heightfield } from './heightfield.js';
 import { Terrain } from './terrain.js';
+import { Vegetation } from './vegetation.js';
+import { Fauna } from './fauna.js';
+import { sharedUniforms } from './scatter.js';
 import { Atmosphere, Moons, makeClouds, makeStars, makeSun, setMoonRadiusCache } from './sky.js';
 import { bindPanel, updateStats, setHud } from './panel.js';
 
@@ -57,10 +60,15 @@ scene.add(new THREE.AmbientLight(0x202830, 0.5));
 const clouds = makeClouds(tex.clouds, planet().radiusKm); scene.add(clouds);
 const moons = new Moons(tex.moons); scene.add(moons.group);
 const moonLight = { dirs: [new THREE.Vector3(), new THREE.Vector3()], light: [0, 0] };
+const seasonU = { value: settings.season };
+const scatterU = sharedUniforms(terrain.material.uniforms, seasonU);
+const vegetation = new Vegetation(scatterU, settings.quality); scene.add(vegetation.group);
+const fauna = new Fauna(scatterU, settings.quality, renderer.getPixelRatio()); scene.add(fauna.group);
 
 function applyPlanet() {
   const p = planet();
   terrain.setRadius(p.radiusKm); controls.setRadius(p.radiusKm * 1000);
+  vegetation.setRadius(p.radiusKm); fauna.setRadius(p.radiusKm);
   atmosphere.configure(p.radiusKm, p.atmosphereScale, p.airDensity * settings.atmo);
   moons.configure(p.radiusKm); setMoonRadiusCache(p.radiusKm);
   clouds.scale.setScalar(1 + 9000 / (p.radiusKm * 1000));
@@ -71,9 +79,10 @@ function applySettings() {
   terrain.material.uniforms.uDetail.value = settings.detail ? 1 : 0;
   clouds.visible = settings.clouds; moons.group.visible = settings.moons;
   terrain.maxTiles = Math.round(1400 * settings.quality);
+  vegetation.visible = settings.trees; fauna.visible = settings.creatures; seasonU.value = settings.season;
 }
 applyPlanet(); applySettings();
-window.kiros = { terrain, camera, controls, settings, atmosphere, scene, renderer };   // debug hook
+window.kiros = { terrain, camera, controls, settings, atmosphere, scene, renderer, vegetation, fauna };   // debug hook
 onChange((s, patch) => { if ('size' in patch || 'atmo' in patch) applyPlanet(); applySettings(); });
 
 // --- time and sun ----------------------------------------------------------------------------------------
@@ -95,7 +104,8 @@ const PLACES = {
   orbit: [32, -4, 4.4e6, 0, -90], veir: [46, -28, 420e3, 0, null], 'veir-ground': [47.9, -25.05, 1800, 215, -14],
   sfere: [47.4, 21.8, 300e3, 0, null], dire: [15.4, 32.9, 260e3, 0, null], 'malos-wet': [12.2, 45.35, 2500, 40, -16],
   dragon: [11, -24.13, 60e3, 0, null], create: [27, 12, 300e3, 0, null], ender: [24.35, -51.5, 3000, 320, -14],
-  'inner-sea': [33, -5, 180e3, 0, null], outer: [20, -70, 1200, 270, -8], north: [62, 20, 500e3, 0, null]
+  'inner-sea': [33, -5, 180e3, 0, null], outer: [20, -70, 1200, 270, -8], north: [62, 20, 500e3, 0, null],
+  'fiira-shore': [7.97, -40.0, 220, 300, -9], 'dragon-coast': [11.9, -27.95, 320, 150, -10], 'create-clearings': [27.5, 12.5, 400, 20, -12]
 };
 controls.t.lat = 32; controls.t.lon = -4; controls.t.alt = 4.4e6; controls.t.pitch = -90; Object.assign(controls.c, controls.t);
 
@@ -136,6 +146,7 @@ renderer.setAnimationLoop(() => {
   stars.material.opacity = 0.9 * (1 - THREE.MathUtils.smoothstep(camera.position.clone().normalize().dot(sunDir), -0.15, 0.12));
 
   terrain.update(camera, settings.relief);
+  { const ll = controls.latLon; vegetation.update(ll.lat, ll.lon, alt); fauna.update(ll.lat, ll.lon, alt); }
   renderer.render(scene, camera);
 
   fpsN++; fpsT += dt; if (fpsT > 0.5) { fps = fpsN / fpsT; fpsN = 0; fpsT = 0; }
