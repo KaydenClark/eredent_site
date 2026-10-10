@@ -4,7 +4,8 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage as nd
 from collections import deque
-from common import OUTLINE, PENUP, build
+from common import OUTLINE, PENUP, CFG, ROOT, build
+import os
 
 L = np.asarray(Image.open(OUTLINE).convert('L'))
 lines = nd.binary_dilation(L < 140, iterations=1)
@@ -65,7 +66,45 @@ for i in range(1, wn + 1):
 raw = L < 140
 water = ~land
 glyph = raw & ~nd.binary_dilation(water, iterations=3) & ~nd.binary_dilation(lakes ^ nd.binary_erosion(lakes, iterations=2), iterations=4)
-np.savez_compressed(build('masks.npz'), land=land, lakes=lakes, inner=inner, glyph=glyph)
+extra = {}
+VAR = CFG.get('variant')
+if VAR:
+    # Variant: keep the penup coastline and land/water exactly as above (old lake beds stay land), but take the lakes
+    # and the mountain marks from another drawing's ink, already registered onto this master grid (RGBA, one color per class).
+    K = np.asarray(Image.open(os.path.join(ROOT, VAR['ink_master'])).convert('RGBA')).astype(int)
+    on = K[..., 3] >= 128
+    ink_of = lambda rgb: on & (np.abs(K[..., :3] - np.array(rgb)).max(-1) <= 40)
+    lake_ink = ink_of(VAR['lake_rgb']); mark_ink = ink_of(VAR['mark_rgb'])
+    # each closed lake loop -> the area inside the centre of its ink line; a loop nested in another is its inner depression
+    ll_, ln_ = nd.label(lake_ink, structure=np.ones((3, 3)))
+    loops = []
+    for i in range(1, ln_ + 1):
+        comp = ll_ == i
+        filled = nd.binary_fill_holes(comp); interior = filled & ~comp
+        if comp.sum() < 12 or interior.sum() < 3:
+            continue
+        d_out = nd.distance_transform_edt(filled); d_in = nd.distance_transform_edt(~interior)
+        loops.append((interior | (comp & (d_in <= d_out)), filled))
+    sept_lakes, sept_glyph = lakes, glyph
+    lakes = np.zeros_like(land); inner = np.zeros_like(land)
+    for j, (region, filled) in enumerate(loops):
+        nested = any(k != j and f2[region].mean() > 0.95 and f2.sum() > filled.sum() for k, (_, f2) in enumerate(loops))
+        (inner if nested else lakes)[region] = True
+    lakes |= inner
+    land_before = land.copy(); land = land | lakes
+    print('variant lakes px', int(lakes.sum()), 'inner px', int(inner.sum()), 'land px changed by the new lakes', int((land != land_before).sum()))
+    water = ~land
+    glyph = mark_ink & land & ~nd.binary_dilation(water, iterations=3) & ~nd.binary_dilation(lakes ^ nd.binary_erosion(lakes, iterations=2), iterations=4)
+    gl_, gn_ = nd.label(glyph, structure=np.ones((3, 3)))
+    glyph = np.isin(gl_, 1 + np.nonzero(nd.sum(glyph, gl_, range(1, gn_ + 1)) >= 6)[0])
+    # what the acceptance check compares the built edges against: the penup coast ink (no old marks, no old lake
+    # outlines) plus the variant's lake ink
+    old_lake_zone = nd.binary_dilation(nd.binary_fill_holes(sept_lakes), iterations=5)
+    extra['check_ink'] = (raw & ~sept_glyph & ~old_lake_zone) | lake_ink
+    # the biome map (kiros_v5) paints the OLD lakes blue, a color its wetland rule also matches; terrain.py ignores
+    # v5 color inside this zone so the old lake beds do not turn into wetland
+    extra['v5_lake_zone'] = old_lake_zone
+np.savez_compressed(build('masks.npz'), land=land, lakes=lakes, inner=inner, glyph=glyph, **extra)
 vis = np.zeros((H, W, 3), np.uint8); vis[land] = (60, 140, 60); vis[lakes] = (40, 90, 220); vis[inner] = (10, 30, 120); vis[glyph] = (255, 255, 255)
 Image.fromarray(vis).save(build('masks_vis.png'))
 print('regions', n, 'max depth', depth.max(), 'land frac', round(float(land.mean()), 3), 'glyph px', int(glyph.sum()))

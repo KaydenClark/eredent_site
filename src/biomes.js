@@ -47,13 +47,13 @@ export function biomeName(sample, lat, h, coast) {
 }
 
 // Where what you see at a spot comes from, for the HUD (trace the world back to its sources).
-export function evidenceFor(sample, lat, h, coast) {
+export function evidenceFor(sample, lat, h, coast, source = 'sept') {
   const z = zoneAt(sample.biome, lat, h, coast);
   if (z === 'water') {
-    if (sample.biome === 4) return 'lake outline: Sept penup blue ink · level: spec (derived/proposed)';
+    if (sample.biome === 4) return `lake outline: ${source === 'oct10' ? 'Oct 10 outline (variant)' : 'Sept penup'} blue ink · level: spec (derived/proposed)`;
     return sample.inner > 0.5 ? 'protected sea: Drive description (canon) · depth: spec (proposed)' : 'outer ocean: Drive description (canon) · depth: spec (proposed)';
   }
-  const ground = 'ground: Sept penup master + spec heights';
+  const ground = source === 'oct10' ? 'ground: Oct 10 outline variant + spec heights' : 'ground: Sept penup master + spec heights';
   if (z === 'desert' || z === 'wetland' || z === 'bayou') return `${ground} · zone: kiros_v5 ${z === 'desert' ? 'yellow' : 'purple'} (canon)`;
   if (z === 'snow' || z === 'alpine' || z === 'tundra') return `${ground} · snowline: spec table (proposed)`;
   return `${ground} · forest band: spec (proposed) · trees generated`;

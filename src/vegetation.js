@@ -227,7 +227,7 @@ export class Vegetation {
     this.uniforms = {
       uTime: { value: 0 }, uRadiusM: fogU.uRadiusM, uSunDir: fogU.uSunDir, uSunColor: fogU.uSunColor, uExposure: fogU.uExposure,
       uUp: { value: new THREE.Vector3(0, 1, 0) }, uDay: { value: 1 },
-      uFogSun: fogU.uFogSun, uFogAway: fogU.uFogAway, uFogDensity: fogU.uFogDensity, uFogHeight: fogU.uFogHeight, uCamAltM: fogU.uCamAltM, uSunDirF: fogU.uSunDirF
+      uFogSun: fogU.uFogSun, uFogAway: fogU.uFogAway, uFogZenith: fogU.uFogZenith, uFogDensity: fogU.uFogDensity, uFogHeight: fogU.uFogHeight, uCamAltM: fogU.uCamAltM, uSunDirF: fogU.uSunDirF
     };
     this.material = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: this.uniforms, side: THREE.DoubleSide });
     this.meshes = {};                 // `${layer}:${species}` -> InstancedMesh, made when first needed

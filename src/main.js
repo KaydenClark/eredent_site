@@ -109,6 +109,7 @@ ctx.setTerrainSource = async name => {
   heightfield = set.hf; ctx.heightfield = set.hf; terrain.hf = set.hf; vegetation.hf = set.hf;
   terrain.setLayers(set.tex, set.meta);
   ctx.terrainSource = name; vegetation.clear();
+  for (const [id, v] of [['ts-sept', 'sept'], ['ts-oct10', 'oct10']]) document.getElementById(id)?.setAttribute('aria-pressed', String(name === v));
   if (rig.nav) rig.setMode(rig.mode, { force: true });     // stand on the new ground
 };
 
@@ -166,18 +167,32 @@ function faceHeading(lat, lon, how) {
   }
   return best;
 }
-const goPlace = id => {
+const goPlace = async id => {
   const p = placeById(id); if (!p) return;
+  // places tied to one terrain source switch to it (the Oct 10 lake only exists in the variant)
+  if (p.terrain && ctx.terrainSource !== p.terrain) { try { await ctx.setTerrainSource(p.terrain); } catch { return; } }
   const v = { ...p.view };
-  if (p.face === 'down') {    // stand on the highest drawn ground within ~2.5 km: the view opens up from there
-    const R = planet().radiusKm * 1000, D = Math.PI / 180; let bh = -1e9, bl = null;
+  let faced = false;
+  if (v.mode === 'walk' && heightfield.land(v.lat, v.lon) < 0.5) {   // a walking start in water: go to the nearest shore, face the water
+    const R = planet().radiusKm * 1000, D = Math.PI / 180;
+    search: for (let r = 100; r < 40000; r += 100) for (let a = 0; a < 360; a += 10) {
+      const la = v.lat + Math.cos(a * D) * r / R / D, lo = v.lon + Math.sin(a * D) * r / (R * Math.cos(v.lat * D)) / D;
+      if (heightfield.land(la, lo) >= 0.5) { v.lat = la; v.lon = lo; v.heading = (a + 180) % 360; faced = true; break search; }
+    }
+  }
+  if (p.face === 'down') {    // stand at the edge with the biggest drop within ~2.5 km and look down it
+    const R = planet().radiusKm * 1000, D = Math.PI / 180; let best = -1e9;
     for (let i = -12; i <= 12; i++) for (let j = -12; j <= 12; j++) {
       const la = v.lat + i * 200 / R / D, lo = v.lon + j * 200 / (R * Math.cos(v.lat * D)) / D, h = terrain.groundAt(la, lo);
-      if (h > bh) { bh = h; bl = [la, lo]; }
+      for (let a = 0; a < 360; a += 30) {
+        const l2 = la + Math.cos(a * D) * 2500 / R / D, o2 = lo + Math.sin(a * D) * 2500 / (R * Math.cos(la * D)) / D;
+        const drop = h - terrain.groundAt(l2, o2) + 0.15 * h;
+        if (drop > best) { best = drop; v.lat = la; v.lon = lo; v.heading = a; }
+      }
     }
-    v.lat = bl[0]; v.lon = bl[1];
+    faced = true;
   }
-  if (typeof p.face === 'string') v.heading = faceHeading(v.lat, v.lon, p.face);
+  if (typeof p.face === 'string' && !faced) v.heading = faceHeading(v.lat, v.lon, p.face);
   if (p.face === 'water') {   // walk on to the strand, a few meters short of the water
     const R = planet().radiusKm * 1000, D = Math.PI / 180, a = v.heading * D;
     for (let d = 0; d < 4000; d += 10) {
@@ -308,7 +323,15 @@ ctx.fog = { sun: terrain.material.uniforms.uFogSun.value, away: terrain.material
 function updateFog(aslM, dt) {
   const u = terrain.material.uniforms, R = planet().radiusKm * 1000;
   const k = 1 - THREE.MathUtils.smoothstep(aslM, 12e3, 30e3);
-  ctx.fog.density = k * 3.2e-5 * settings.atmo * (planet().key === 'small' ? 1.1 : 1);
+  // proposed in the spec: mist in the valleys at dawn, fog over the cold northern seas; crisp over the snow ranges
+  const ll = rig.latLon, local = ((settings.hour + ll.lon / 15) % 24 + 24) % 24;
+  const decl = settings.tiltDeg * Math.sin(settings.season * Math.PI * 2), D = Math.PI / 180;
+  const cH = -Math.tan(ll.lat * D) * Math.tan(decl * D), sunrise = 12 - (cH <= -1 ? 12 : cH >= 1 ? 0 : Math.acos(cH) / D / 15);
+  const dawn = Math.exp(-(((local - sunrise - 0.6) / 1.3) ** 2));
+  const coldSea = ll.lat > 55 && heightfield.land(ll.lat, ll.lon) < 0.5 ? 1 : 0;
+  const mist = Math.max(dawn * (settings.weather === false ? 0 : 1), coldSea * 0.8);
+  ctx.fog.height = 1500 * (1 - 0.65 * mist);
+  ctx.fog.density = k * 3.2e-5 * settings.atmo * (planet().key === 'small' ? 1.1 : 1) * (1 + 3 * mist);
   ctx.fog.camAlt = aslM;
   u.uFogDensity.value = ctx.fog.density; u.uCamAltM.value = aslM; u.uFogHeight.value = ctx.fog.height;
   fogT += dt;
@@ -325,6 +348,8 @@ function updateFog(aslM, dt) {
     skyRadiance(dA, camera.position, atmosphere.material.uniforms, fogA);
     skyRadiance(dB, camera.position, atmosphere.material.uniforms, fogB);
     u.uFogSun.value.copy(fogA); u.uFogAway.value.copy(fogB);
+    const zen = up.clone().multiplyScalar(0.92).addScaledVector(flat, -0.39).normalize();   // ~67° up, away from the sun
+    skyRadiance(zen, camera.position, atmosphere.material.uniforms, u.uFogZenith.value);
     void R;
   }
 }
@@ -401,7 +426,7 @@ function frame(forcedDt) {
     const s = heightfield.sample(ll.lat, ll.lon);
     const where = heightfield.inside(ll.lat, ll.lon) ? biomeName(s, ll.lat, ground, heightfield.land(ll.lat, ll.lon)) : 'open ocean';
     const modeLine = rig.mode === 'survey' ? 'Survey' : `${rig.mode === 'walk' ? 'Walking' : 'Flying'} · speed ${fmtSpeed(rig.speedMul)}`;
-    const ev = heightfield.inside(ll.lat, ll.lon) ? evidenceFor(s, ll.lat, ground, heightfield.land(ll.lat, ll.lon)) : 'open ocean beyond the mapped window';
+    const ev = heightfield.inside(ll.lat, ll.lon) ? evidenceFor(s, ll.lat, ground, heightfield.land(ll.lat, ll.lon), ctx.terrainSource) : 'open ocean beyond the mapped window';
     setHud(`${modeLine}\n${fmtAlt(alt)} above ground · ${fmtAlt(ground)} elevation\n${where}\n${ev}\n${fmtLat(ll.lat)} ${fmtLon(ll.lon)} · ${planet().key === 'small' ? 'small world' : 'Earth-sized'}\n${terrain.count} tiles · ${fps.toFixed(0)} fps`);
     ctx.fps = fps;
   }

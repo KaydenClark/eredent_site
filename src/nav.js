@@ -10,7 +10,7 @@ const D2R = Math.PI / 180;
 
 export function createNav({ lat, lon, heading = 0, pitch = 0, mode = 'walk', h, env }) {
   const nav = { lat, lon, heading, pitch, mode, h: h ?? 0, vel: { e: 0, n: 0, u: 0 }, vz: 0, onGround: true, inWater: false,
-    speedMul: 1, clearance: 2.5 };
+    speedMul: 1, clearance: 4 };   // clears the ocean swell
   setMode(nav, mode, env);
   if (mode === 'fly' && h !== undefined) nav.h = Math.max(h, env.groundAt(lat, lon) + nav.clearance);
   return nav;

@@ -15,3 +15,6 @@ Thumbs.db
 # regenerable previews of private source maps (python pipeline/compare_sources.py); kept local, not published
 public/sources/previews/
 public/sources/thumbs/
+
+# variant builds (python pipeline/run_all.py --variant <name>): regenerable intermediates
+pipeline/build_*/

@@ -30,6 +30,7 @@ float sampleGround(vec2 uv, out float coast) {
 // Exponential height fog standing in for aerial perspective below ~30 km; above that the atmosphere shell does it.
 export const GLSL_FOG = /* glsl */`
 uniform vec3 uFogSun, uFogAway;   // horizon sky radiance toward the sun's azimuth and away from it (pre-exposure)
+uniform vec3 uFogZenith;          // sky radiance straight up
 uniform float uFogDensity;        // extinction at sea level, per meter (0 = off)
 uniform float uFogHeight;         // scale height, m
 uniform float uCamAltM;           // camera height above sea level, m
@@ -49,11 +50,12 @@ vec3 applyFog(vec3 col, vec3 toPoint, float pointAltM, float radiusM) {
 
 export const TERRAIN_VERT = /* glsl */`
 precision highp float; precision highp int;
-attribute vec2 aGrid; attribute float aSkirt;
-attribute vec4 aTile;          // u0, v0, size, depth   (instance)
-attribute float aFace;         // cube face             (instance)
-attribute vec3 aC, aJu, aJv, aHuu, aHuv, aHvv;   // deep tiles: center relative to the origin, Taylor terms (instance)
-uniform float uRelief, uDetail, uGridN, uDeep;
+attribute vec3 aGridS;         // grid u, v, skirt flag
+attribute vec4 aTile;          // u0, v0, size, depth + 32·face   (instance)
+attribute vec4 aP0, aP1, aP2, aP3; attribute vec2 aP4;   // deep tiles: center (relative to the origin) and Taylor terms, packed
+attribute vec4 aU0, aU1, aU2;  // deep tiles: layer uv at the center and its Taylor terms
+uniform float uRelief, uDetail, uGridN, uDeep, uTime;
+uniform sampler2D uMask;
 uniform vec3 uOrigin;          // unit direction of the local origin; the mesh is placed there
 uniform vec3 uCamLocal;        // camera position relative to the origin
 varying vec3 vNormal, vSphere, vView; varying vec2 vUvW; varying float vIn, vDepth, vAlt, vCoast;
@@ -66,13 +68,15 @@ ${GLSL_LAYERS}
 // Direction to a grid point, relative to the origin. Deep (small, near) tiles use a second-order expansion about
 // their center computed on the CPU in double precision, so nothing near the camera is ever the small difference of
 // two numbers near 1. Coarse tiles are far away and use the exact cube-to-sphere mapping.
+float tDepth, tFace;
 vec3 tileRel(vec2 g) {
-  if (aTile.w >= uDeep) {
+  if (tDepth >= uDeep) {
     vec2 d = (g - 0.5) * aTile.z;
-    return aC + aJu * d.x + aJv * d.y + 0.5 * aHuu * d.x * d.x + aHuv * d.x * d.y + 0.5 * aHvv * d.y * d.y;
+    vec3 C = aP0.xyz, Ju = vec3(aP0.w, aP1.xy), Jv = vec3(aP1.zw, aP2.x), Huu = aP2.yzw, Huv = aP3.xyz, Hvv = vec3(aP3.w, aP4);
+    return C + Ju * d.x + Jv * d.y + 0.5 * Huu * d.x * d.x + Huv * d.x * d.y + 0.5 * Hvv * d.y * d.y;
   }
   vec2 st = aTile.xy + g * aTile.z;
-  return normalize(spherify(cubePoint(aFace, st * 2.0 - 1.0))) - uOrigin;
+  return normalize(spherify(cubePoint(tFace, st * 2.0 - 1.0))) - uOrigin;
 }
 
 // fractal relief below the data resolution (same function as detailAt() in heightfield.js)
@@ -91,16 +95,36 @@ float detail(vec3 n, float h, float landW, float fade) {
   return d * fade * landW * uDetail;
 }
 
+// travelling swell on the water near the camera: long heavy swell on the deep outer ocean (canon: hostile), small
+// waves in the protected seas and lakes. Anchored to the planet (phase from the direction), so it does not slide.
+float swell(vec3 n, float coast, vec2 uv, float near) {
+  float wat = 1.0 - smoothstep(0.30, 0.47, coast);
+  if (wat <= 0.0 || near <= 0.0) return 0.0;
+  vec4 m = texture2D(uMask, uv);
+  float depth = m.r * 5500.0, biome = floor(m.b * 255.0 + 0.5);
+  float amp = abs(biome - 4.0) < 0.5 ? 0.12 : mix(0.3, 1.6, smoothstep(150.0, 1500.0, depth)) * (m.g > 0.5 ? 0.35 : 1.0);
+  float k = uRadiusM * 6.2831853;
+  float w = sin(dot(n, vec3(0.80, 0.25, 0.55)) * k / 140.0 + uTime * 0.66)
+          + 0.6 * sin(dot(n, vec3(-0.35, 0.72, 0.6)) * k / 75.0 + uTime * 0.91)
+          + 0.35 * sin(dot(n, vec3(0.2, -0.6, 0.77)) * k / 31.0 + uTime * 1.4);
+  return w * amp * wat * near * 0.55;
+}
+
 vec3 surfacePoint(vec2 g, out float h, out vec2 uvW, out float inW, out float coast, out vec3 nAbs) {
   vec3 r = tileRel(g);
   nAbs = normalize(uOrigin + r);
-  uvW = windowUv(latLon(nAbs)); inW = inWindow(uvW);
+  if (tDepth >= uDeep) {
+    vec2 d = (g - 0.5) * aTile.z;
+    uvW = aU0.xy + aU0.zw * d.x + aU1.xy * d.y + 0.5 * aU1.zw * d.x * d.x + aU2.xy * d.x * d.y + 0.5 * aU2.zw * d.y * d.y;
+  } else uvW = windowUv(latLon(nAbs));
+  inW = inWindow(uvW);
   coast = 0.0; h = 0.0;
   if (inW > 0.5) h = sampleGround(uvW, coast);
   float hs0 = h / uRadiusM * uRelief;
   float dcam = distance(uCamLocal, r * (1.0 + hs0) + uOrigin * hs0);
   float fade = 1.0 - smoothstep(0.03, 0.12, dcam);
   h += detail(nAbs, h, smoothstep(0.5, 0.92, coast), fade);
+  if (inW > 0.5) h += swell(nAbs, coast, uvW, 1.0 - smoothstep(0.004, 0.012, dcam)) / max(uRelief, 1.0);
   float hs = h / uRadiusM * uRelief;
   return r * (1.0 + hs) + uOrigin * hs;
 }
@@ -108,14 +132,16 @@ vec3 surfacePoint(vec2 g, out float h, out vec2 uvW, out float inW, out float co
 void main() {
   float e = 1.0 / uGridN;
   float h, h1, h2, inW, i1, i2, coast, c1, c2; vec2 uvW, t1, t2; vec3 n, n1, n2;
+  tFace = floor((aTile.w + 0.5) / 32.0); tDepth = aTile.w - 32.0 * tFace;
+  float aSkirt = aGridS.z; vec2 aGrid = aGridS.xy;
   vec2 g = aSkirt > 0.5 ? clamp(aGrid, 0.0, 1.0) : aGrid;        // skirt vertices sit on the edge, then drop
   vec3 p = surfacePoint(g, h, uvW, inW, coast, n);
   vec3 p1 = surfacePoint(g + vec2(e, 0.0), h1, t1, i1, c1, n1);
   vec3 p2 = surfacePoint(g + vec2(0.0, e), h2, t2, i2, c2, n2);
   vec3 N = normalize(cross(p1 - p, p2 - p));
   if (dot(N, n) < 0.0) N = -N;
-  if (aSkirt > 0.5) p -= n * (aTile.z * 0.04);     // skirts hide the hairline cracks between LOD levels
-  vNormal = N; vSphere = n; vUvW = uvW; vIn = inW; vDepth = aTile.w; vAlt = h; vCoast = coast;
+  if (aSkirt > 0.5) p -= n * (aTile.z * 0.06 + 4.0 / uRadiusM);   // skirts hide the cracks between LOD levels
+  vNormal = N; vSphere = n; vUvW = uvW; vIn = inW; vDepth = tDepth; vAlt = h; vCoast = coast;
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vView = (vec4(mv.xyz, 0.0) * viewMatrix).xyz;    // camera -> point, world orientation, full precision
   gl_Position = projectionMatrix * mv;
@@ -164,7 +190,7 @@ void main() {
   {
     // calm inside the protected seas and lakes, long heavy swell on the deep outer ocean (canon)
     float swell = (lake || inner > 0.5) ? 0.03 : mix(0.04, 0.09, smoothstep(150.0, 1500.0, depth));
-    vec3 nn = n;
+    vec3 nn = normalize(mix(n, N, near));
     if (near > 0.0) {
       vec3 ex = normalize(cross(vec3(0.0, 1.0, 0.0), n)); vec3 ey = cross(n, ex);   // tangent plane
       vec3 q1 = vSphere * 15000.0 + vec3(uTime * 0.05, uTime * 0.03, 0.0);    // long waves
@@ -172,7 +198,7 @@ void main() {
       vec3 q3 = vSphere * 700000.0 + vec3(uTime * 0.9, -uTime * 0.7, uTime * 0.4); // ripples, only up close
       vec2 w = (vec2(vnoise(q1), vnoise(q1 + 3.7)) - 0.5) * 2.0 + (vec2(vnoise(q2), vnoise(q2 + 5.1)) - 0.5) * 0.8;
       w += (vec2(vnoise(q3), vnoise(q3 + 9.3)) - 0.5) * 0.6 * (1.0 - smoothstep(30.0, 400.0, distM));
-      nn = normalize(n + (ex * w.x + ey * w.y) * swell * near);
+      nn = normalize(nn + (ex * w.x + ey * w.y) * swell * near);
     }
     float fres = pow(1.0 - max(dot(nn, V), 0.0), 5.0);
     vec3 R = reflect(-uSunDir, nn);
@@ -180,9 +206,11 @@ void main() {
     vec3 skyTint = mix(vec3(0.05, 0.09, 0.16), vec3(0.35, 0.55, 0.85), day);
     // low down, the water mirrors the actual horizon sky (the same radiance the fog fades into)
     if (uFogDensity > 0.0) {
-      float sa = 0.5 + 0.5 * dot(normalize(reflect(-V, nn)), uSunDirF);
-      vec3 hz = min(mix(uFogAway, uFogSun, pow(sa, 6.0)), vec3(2.5));
-      skyTint = mix(skyTint, hz * 0.9, smoothstep(0.0, 1.0, uFogDensity / 3e-5));
+      vec3 Rf = normalize(reflect(-V, nn));
+      float sa = 0.5 + 0.5 * dot(Rf, uSunDirF), el = dot(Rf, n);
+      vec3 hz = min(mix(uFogAway, uFogSun, pow(sa, 8.0)), vec3(2.0));
+      vec3 refl = mix(hz, uFogZenith, smoothstep(0.02, 0.45, el));   // higher reflections see the deeper sky
+      skyTint = mix(skyTint, refl * 0.85, smoothstep(0.0, 1.0, uFogDensity / 3e-5));
     }
     float diff = max(dot(nn, uSunDir), 0.0);
     // up close the water has a body of its own: turquoise over sand in the protected shallows, near-black navy on the
