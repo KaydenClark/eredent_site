@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.vite/
+pipeline/venv/
+pipeline/build/*.npz
+pipeline/build/*.npy
+pipeline/build/*_vis.png
+pipeline/build/*_check.png
+pipeline/build/elev_vis.png
+pipeline/build/kiros_color_source.png
+kiros_layers.zip
+.DS_Store
+Thumbs.db

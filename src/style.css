@@ -1,0 +1,58 @@
+/* One dark look on purpose: the page is a night-sky scene, so it ignores the viewer's light/dark setting. */
+:root {
+  --void: #04070d;
+  --ink: #e6ecef;
+  --mist: #93a4ad;
+  --panel: rgba(8, 16, 24, .74);
+  --line: rgba(150, 190, 200, .22);
+  --shoal: #7ec9bb;
+  --f-display: "Spectral", Georgia, "Times New Roman", serif;
+  --f-ui: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--void); color: var(--ink); font: 14px/1.35 var(--f-ui); overflow: hidden; }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+.name { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); top: calc(env(safe-area-inset-top, 0px) + 16px); pointer-events: none; }
+.name h1 { font-family: var(--f-display); font-weight: 300; font-size: clamp(28px, 5vw, 46px); letter-spacing: .06em; margin: 0; line-height: 1; }
+.name p { margin: .35em 0 0; font-family: var(--f-display); font-style: italic; font-weight: 300; color: var(--mist); font-size: 15px; }
+
+#status { position: fixed; inset: 0; display: grid; place-items: center; font-family: var(--f-display); font-style: italic; color: var(--mist); pointer-events: none; text-align: center; padding: 16px; }
+#status[hidden] { display: none; }
+
+.panel { position: fixed; left: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); width: min(340px, calc(100% - 32px));
+  max-height: calc(100% - 120px); overflow: auto; background: var(--panel); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: grid; gap: 11px; }
+.panel h2 { margin: 0; font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--shoal); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg button { all: unset; cursor: pointer; text-align: center; padding: 7px 6px; font-size: 13px; color: var(--mist); line-height: 1.2; }
+.seg button span { font-size: 11px; }
+.seg button[aria-pressed="true"] { background: rgba(126, 201, 187, .16); color: var(--ink); }
+.seg button:focus-visible, .row input:focus-visible, .row select:focus-visible, .toggles input:focus-visible, #hide:focus-visible { outline: 2px solid var(--shoal); outline-offset: 2px; }
+dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 13px; }
+dt { color: var(--mist); } dd { margin: 0; font-family: var(--f-data); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+.row { display: grid; grid-template-columns: 5.2em 1fr auto; align-items: center; gap: 10px; font-size: 13px; color: var(--mist); }
+.row input[type=range] { width: 100%; accent-color: var(--shoal); margin: 0; }
+.row select { grid-column: 2 / 4; background: rgba(255,255,255,.06); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 5px 6px; font: inherit; }
+.row output { font-family: var(--f-data); font-size: 12px; color: var(--ink); min-width: 3.6em; text-align: right; }
+.toggles { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--mist); }
+.toggles label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.toggles input { accent-color: var(--shoal); margin: 0; }
+.note { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--mist); }
+#hide { all: unset; cursor: pointer; position: absolute; top: 10px; right: 12px; font-size: 12px; color: var(--mist); }
+.panel.min > :not(h2):not(#hide) { display: none; }
+
+.hud { position: fixed; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); font-family: var(--f-data); font-size: 11.5px; color: var(--mist);
+  text-align: right; pointer-events: none; white-space: pre-line; line-height: 1.5; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+.credit { position: fixed; right: 16px; top: calc(env(safe-area-inset-top, 0px) + 16px); font-size: 11.5px; color: var(--mist); }
+.credit a { color: var(--shoal); text-decoration: none; }
+.credit a:hover { text-decoration: underline; }
+
+@media (max-width: 520px) {
+  .name p, .credit { display: none; }
+  .hud { font-size: 10.5px; }
+}
+@media (prefers-reduced-motion: reduce) { .panel { backdrop-filter: none; } }

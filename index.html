@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kiros</title>
+<meta name="description" content="Kiros, before the first people. An explorable garden world built from the Kiros World Build Spec.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,500;1,300&family=IBM+Plex+Sans+Condensed:wght@400;500&family=IBM+Plex+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+<canvas id="view" aria-label="3D globe of Kiros. Drag to rotate, scroll or pinch to descend."></canvas>
+
+<header class="name">
+  <h1>KIROS</h1>
+  <p>Before the first people</p>
+</header>
+
+<div id="status" role="status">Raising the continents…</div>
+
+<section class="panel" id="panel" aria-label="Survey controls">
+  <button id="hide" aria-expanded="true">Hide</button>
+  <h2>Survey</h2>
+
+  <div class="seg" role="group" aria-label="Planet size">
+    <button id="sz-small" aria-pressed="true">Small world<br><span>Lake Veir = Bonneville</span></button>
+    <button id="sz-earth" aria-pressed="false">Earth-sized<br><span>land scaled up</span></button>
+  </div>
+
+  <dl id="stats"></dl>
+
+  <div class="row"><label for="hour">Time of day</label><input id="hour" type="range" min="0" max="24" step="0.05" value="10.5"><output id="hour-out">10:30</output></div>
+  <div class="row"><label for="season">Season</label><input id="season" type="range" min="0" max="1" step="0.01" value="0.25"><output id="season-out">summer</output></div>
+  <div class="row"><label for="relief">Relief</label><input id="relief" type="range" min="1" max="20" step="0.5" value="1"><output id="relief-out">1×</output></div>
+  <div class="row"><label for="atmo">Air</label><input id="atmo" type="range" min="0.3" max="3" step="0.1" value="1"><output id="atmo-out">1.0×</output></div>
+
+  <div class="toggles">
+    <label><input id="clock" type="checkbox" checked> Let time pass</label>
+    <label><input id="clouds" type="checkbox" checked> Clouds</label>
+    <label><input id="moons" type="checkbox" checked> Moons</label>
+    <label><input id="detail" type="checkbox" checked> Fine detail</label>
+  </div>
+
+  <div class="row"><label for="goto">Fly to</label>
+    <select id="goto">
+      <option value="">—</option>
+      <option value="orbit">Orbit, whole cluster</option>
+      <option value="veir">Lake Veir and the Veir Mountains</option>
+      <option value="veir-ground">Veir shoreline, 2 km up</option>
+      <option value="sfere">Sfere and the Roan ranges</option>
+      <option value="dire">Dire Lake basin</option>
+      <option value="malos-wet">Malos east wetlands</option>
+      <option value="dragon">Dragon Islands volcano</option>
+      <option value="create">Create and the break zone</option>
+      <option value="ender">Ender</option>
+      <option value="inner-sea">Inner sea between Fiira and Roan</option>
+      <option value="outer">Outer ocean, west of Ender</option>
+      <option value="north">Northern islands and the Ice Sea</option>
+    </select>
+  </div>
+
+  <p class="note" id="note"></p>
+</section>
+
+<aside class="hud" id="hud" aria-live="off"></aside>
+
+<footer class="credit"><a href="https://github.com/KaydenClark/eredent_site" rel="noopener">source</a> · built from the Kiros World Build Spec</footer>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

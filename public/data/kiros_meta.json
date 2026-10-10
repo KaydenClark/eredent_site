@@ -1,0 +1,77 @@
+{
+ "note": "Elevation PNG stores meters+6000 (uint16). Grid = penup outline (1362x1155) upsampled 2x.",
+ "projection": "azimuthal equidistant",
+ "center_lat_deg": 37.2,
+ "center_lon_deg": 0.0,
+ "center_px_outline": [
+  678.0,
+  552.0
+ ],
+ "deg_per_outline_px": 0.076,
+ "km_per_outline_px_bonneville_ruler": 2.2453,
+ "web": {
+  "equirect": [
+   8192,
+   4096
+  ],
+  "window_px": [
+   2184,
+   136,
+   5870,
+   2366
+  ],
+  "window_deg": {
+   "lon": [
+    -84,
+    78
+   ],
+   "lat": [
+    -14,
+    84
+   ]
+  },
+  "height16": {
+   "file": "textures/kiros_region_height16_4k.png",
+   "size": [
+    4096,
+    2478
+   ],
+   "encoding": "meters = R*256 + G - 6000"
+  },
+  "mask": {
+   "file": "textures/kiros_region_mask_4k.png",
+   "size": [
+    4096,
+    2478
+   ],
+   "R": "water depth m = R/255*5500",
+   "G": "protected sea 0..1",
+   "B": "biome index (water = 0 or 4)"
+  },
+  "biome_index": {
+   "0": "ocean",
+   "1": "forest",
+   "2": "desert",
+   "3": "wetland",
+   "4": "lake",
+   "5": "snow hatch",
+   "6": "bayou"
+  },
+  "color": {
+   "file": "textures/kiros_region_color_8k.jpg",
+   "size": [
+    3686,
+    2230
+   ]
+  },
+  "ocean_globe": {
+   "file": "textures/kiros_ocean_2k.png",
+   "size": [
+    2048,
+    1024
+   ]
+  },
+  "max_land_m": 4456.54150390625,
+  "min_ocean_m": -5599.18994140625
+ }
+}

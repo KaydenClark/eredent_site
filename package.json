@@ -1,0 +1,30 @@
+{
+  "name": "eredent-site",
+  "version": "0.2.0",
+  "description": "Kiros, before the first people. An explorable 3D world built from the Kiros World Build Spec.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "pipeline": "python pipeline/run_all.py"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KaydenClark/eredent_site.git"
+  },
+  "keywords": [],
+  "author": "Kayden Clark",
+  "license": "UNLICENSED",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/KaydenClark/eredent_site/issues"
+  },
+  "homepage": "https://kaydenclark.github.io/eredent_site/",
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^6.4.4"
+  },
+  "private": true
+}
