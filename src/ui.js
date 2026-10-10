@@ -7,6 +7,7 @@ export function initUi({ rig, ctx, places, goPlace }) {
   const buttons = { survey: $('m-survey'), walk: $('m-walk'), fly: $('m-fly') };
   const pad = $('pad'), hint = $('hint'), help = $('help');
   const coarse = matchMedia('(pointer: coarse)').matches;
+  let padWanted = false;
 
   buttons.survey.onclick = () => rig.setMode('survey', { rise: true });
   buttons.walk.onclick = () => rig.landAtCenter('walk');
@@ -22,6 +23,7 @@ export function initUi({ rig, ctx, places, goPlace }) {
     if (dlg && dlg !== help) return;
     if (e.key === 'Home' && !dlg) { reset(); e.preventDefault(); }
     else if (e.key.toLowerCase() === 'h' || e.key === '?') { help.open ? help.close() : help.showModal(); e.preventDefault(); }
+    else if (e.key.toLowerCase() === 'p' && !dlg) { padWanted = !padWanted; pad.hidden = rig.mode === 'survey' || !(coarse || padWanted); e.preventDefault(); }
   });
 
   // hold-to-move buttons, for touch screens and anyone who prefers the mouse
@@ -44,7 +46,7 @@ export function initUi({ rig, ctx, places, goPlace }) {
   }
   rig.onModeChange(mode => {
     for (const [k, b] of Object.entries(buttons)) b.setAttribute('aria-pressed', String(k === mode));
-    pad.hidden = mode === 'survey';
+    pad.hidden = mode === 'survey' || !(coarse || padWanted);   // touch screens, or on request (P)
     const panel = $('panel');
     if (mode !== 'survey' && !panel.classList.contains('min')) $('hide').click();
     if (mode === 'survey') rig.pad = Object.fromEntries(Object.keys(rig.pad).map(k => [k, false]));

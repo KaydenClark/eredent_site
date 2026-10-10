@@ -16,7 +16,7 @@ const alt = m => (typeof m !== 'number' ? '?' : m >= 10000 ? `${fmtNumber(m / 10
 
 export function describeView(v) {
   if (!v) return '';
-  const parts = [`lat ${v.lat}`, `lon ${v.lon}`, `(${deg(v.lat, 'N', 'S')} ${deg(v.lon, 'E', 'W')})`, `alt ${alt(v.alt)}`];
+  const parts = [`lat ${(+v.lat).toFixed(4)}`, `lon ${(+v.lon).toFixed(4)}`, `(${deg(v.lat, 'N', 'S')} ${deg(v.lon, 'E', 'W')})`, `alt ${alt(v.alt)}`];
   if (typeof v.heading === 'number') parts.push(`heading ${Math.round(v.heading)}°`);
   if (typeof v.pitch === 'number') parts.push(`pitch ${Math.round(v.pitch)}°`);
   if (v.mode) parts.push(`mode ${v.mode}`);

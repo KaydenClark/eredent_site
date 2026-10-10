@@ -109,7 +109,7 @@ ctx.setTerrainSource = async name => {
   try { set = await terrainSets[name]; } catch (e) { delete terrainSets[name]; throw e; }
   if (req !== sourceReq) return false;                      // a later switch won
   heightfield = set.hf; ctx.heightfield = set.hf; terrain.hf = set.hf; vegetation.hf = set.hf;
-  terrain.setLayers(set.tex, set.meta);
+  terrain.setLayers(set.tex, set.meta, set.hf);
   ctx.terrainSource = name; vegetation.clear();
   for (const [id, v] of [['ts-sept', 'sept'], ['ts-oct10', 'oct10']]) document.getElementById(id)?.setAttribute('aria-pressed', String(name === v));
   if (rig.nav) rig.setMode(rig.mode, { force: true });     // stand on the new ground
@@ -203,8 +203,10 @@ const goPlace = async id => {
     faced = true;
   }
   if (typeof p.face === 'string' && !faced) v.heading = faceHeading(v.lat, v.lon, p.face);
+  const towardWater = v.heading;
+  if (p.faceOffset) v.heading = (v.heading + p.faceOffset) % 360;   // look along the shore: water and land both in view
   if (p.face === 'water') {   // walk on to the strand, a few meters short of the water
-    const R = planet().radiusKm * 1000, D = Math.PI / 180, a = v.heading * D;
+    const R = planet().radiusKm * 1000, D = Math.PI / 180, a = towardWater * D;
     for (let d = 0; d < 4000; d += 10) {
       const la = v.lat + Math.cos(a) * 10 / R / D, lo = v.lon + Math.sin(a) * 10 / (R * Math.cos(v.lat * D)) / D;
       if (heightfield.land(la, lo) < 0.482) break;
@@ -236,7 +238,7 @@ if (import.meta.env.DEV) {
   const { mountWorkshop } = await import('./workshop/workshop.js');
   workshop = mountWorkshop({
     getView: () => rig.view,
-    flyTo: view => { const p = ALL_PLACES.find(q => q.view === view); p ? goPlace(p.id) : rig.goTo(view); },
+    flyTo: view => { const p = ALL_PLACES.find(q => q.view === view); p ? goPlace(p.id) : rig.goTo(view); if (innerWidth < 1400) workshop.close(); },
     places: ALL_PLACES,
     setOverlay: (name, opacity) => ctx.setOverlay(name, opacity),
     onOpenChange: open => { document.body.classList.toggle('ws-open', open); if (open && document.pointerLockElement) document.exitPointerLock(); rig.keys.blur(); }
@@ -288,7 +290,8 @@ function applyLook(name) {
     const m = probe.dirs[0].clone().add(probe.dirs[1]).normalize();
     const l = lon * D, p = lat * D;
     const east = new THREE.Vector3(-Math.sin(l), 0, -Math.cos(l)), north = new THREE.Vector3(-Math.sin(p) * Math.cos(l), Math.cos(p), Math.sin(p) * Math.sin(l));
-    const heading = Math.atan2(m.dot(east), m.dot(north)) / D, pitch = Math.min(35, Math.asin(Math.min(1, m.dot(up))) / D * 0.6);
+    const el0 = Math.asin(Math.min(1, probe.dirs[0].dot(up))) / D, el1 = Math.asin(Math.min(1, probe.dirs[1].dot(up))) / D;
+    const heading = Math.atan2(m.dot(east), m.dot(north)) / D, pitch = Math.max(-5, Math.min(35, Math.max(el0, el1) - camera.fov * 0.32));
     if (rig.nav) { rig.nav.heading = (heading + 360) % 360; rig.nav.pitch = pitch; }
     else { rig.t.heading = rig.c.heading = heading; rig.t.pitch = rig.c.pitch = Math.max(-89, Math.min(8, pitch)); rig.manualPitch = true; }
   }
@@ -432,7 +435,7 @@ function frame(forcedDt) {
     const ll = rig.latLon, coast = heightfield.land(ll.lat, ll.lon), smp = heightfield.sample(ll.lat, ll.lon);
     const shore = coast >= 0.47 ? 1 - THREE.MathUtils.smoothstep(coast, 0.47, 0.66) : THREE.MathUtils.smoothstep(coast, 0.2, 0.47) * (smp.inner > 0.5 ? 0.6 : 1);
     const v = rig.nav ? Math.hypot(rig.nav.vel.e, rig.nav.vel.n, rig.nav.vel.u) : 0;
-    ambience.update(dt, { zone: heightfield.inside(ll.lat, ll.lon) ? zoneAt(smp.biome, ll.lat, ground / settings.relief, coast) : 'water', agl: alt, shore, day: dayK, altitude: asl, speed: v });
+    ambience.update(dt, { zone: heightfield.inside(ll.lat, ll.lon) ? zoneAt(smp.biome, ll.lat, ground / settings.relief, coast, ll.lon) : 'water', agl: alt, shore, day: dayK, altitude: asl, speed: v });
   }
   renderer.render(scene, camera);
 
@@ -442,9 +445,9 @@ function frame(forcedDt) {
     hudT = 0;
     const ll = rig.latLon;
     const s = heightfield.sample(ll.lat, ll.lon);
-    const where = heightfield.inside(ll.lat, ll.lon) ? biomeName(s, ll.lat, ground / settings.relief, heightfield.land(ll.lat, ll.lon)) : 'open ocean';
+    const where = heightfield.inside(ll.lat, ll.lon) ? biomeName(s, ll.lat, ground / settings.relief, heightfield.land(ll.lat, ll.lon), ll.lon) : 'open ocean';
     const modeLine = rig.mode === 'survey' ? 'Survey' : `${rig.mode === 'walk' ? 'Walking' : 'Flying'} · speed ${fmtSpeed(rig.speedMul)}`;
-    const ev = heightfield.inside(ll.lat, ll.lon) ? evidenceFor(s, ll.lat, ground / settings.relief, heightfield.land(ll.lat, ll.lon), ctx.terrainSource) : 'open ocean beyond the mapped window';
+    const ev = heightfield.inside(ll.lat, ll.lon) ? evidenceFor(s, ll.lat, ground / settings.relief, heightfield.land(ll.lat, ll.lon), ctx.terrainSource, ll.lon) : 'open ocean beyond the mapped window';
     setHud(`${modeLine}\n${fmtAlt(alt)} above ground · ${fmtAlt(ground)} elevation\n${where}\n${ev}\n${fmtLat(ll.lat)} ${fmtLon(ll.lon)} · ${planet().key === 'small' ? 'small world' : 'Earth-sized'}\n${terrain.count} tiles · ${fps.toFixed(0)} fps`);
     ctx.fps = fps;
   }

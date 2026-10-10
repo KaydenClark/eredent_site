@@ -7,6 +7,7 @@ export { GLSL_NOISE };
 // blended by hand, so the CPU copy in heightfield.js reproduces it exactly.
 export const GLSL_LAYERS = /* glsl */`
 uniform sampler2D uHeight; uniform vec2 uHeightSize;
+uniform sampler2D uWater;      // water-level field: lowest height in each texel's 3×3 neighbourhood (heightfield.js)
 uniform sampler2D uCoast; uniform vec2 uCoastSize;
 uniform vec4 uWindow;          // lon0, lat0, lon1, lat1 (deg)
 uniform float uRadiusM;        // planet radius in meters (scene unit = 1 radius)
@@ -14,6 +15,7 @@ uniform float uRadiusM;        // planet radius in meters (scene unit = 1 radius
 vec2 windowUv(vec2 ll) { return vec2((ll.y - uWindow.x) / (uWindow.z - uWindow.x), (ll.x - uWindow.y) / (uWindow.w - uWindow.y)); }
 float inWindow(vec2 uv) { vec2 d = step(vec2(0.0), uv) * step(uv, vec2(1.0)); return d.x * d.y; }
 float decodeH(vec2 uv) { vec4 t = texture2D(uHeight, uv); return floor(t.r * 255.0 + 0.5) * 256.0 + floor(t.g * 255.0 + 0.5) - 6000.0; }
+float decodeW(vec2 uv) { vec4 t = texture2D(uWater, uv); return floor(t.r * 255.0 + 0.5) * 256.0 + floor(t.g * 255.0 + 0.5) - 6000.0; }
 float decodeC(vec2 uv) { return floor(texture2D(uCoast, uv).r * 255.0 + 0.5) / 255.0; }
 // height with the shoreline pulled down to the water: h00..h11 are the four texels, wl the lowest of them
 float sampleGround(vec2 uv, out float coast) {
@@ -22,8 +24,8 @@ float sampleGround(vec2 uv, out float coast) {
   float hb = mix(mix(a, bb, f.x), mix(c, d, f.x), f.y);
   vec2 sc = uv * uCoastSize - 0.5; vec2 ic = floor(sc); vec2 fc = sc - ic; vec2 oc = 1.0 / uCoastSize; vec2 bc = (ic + 0.5) * oc;
   coast = mix(mix(decodeC(bc), decodeC(bc + vec2(oc.x, 0.0)), fc.x), mix(decodeC(bc + vec2(0.0, oc.y)), decodeC(bc + oc), fc.x), fc.y);
-  float wl = min(min(a, bb), min(c, d));
-  return wl + (hb - wl) * smoothstep(0.42, 0.8, coast);
+  float wl = min(hb, mix(mix(decodeW(b), decodeW(b + vec2(o.x, 0.0)), f.x), mix(decodeW(b + vec2(0.0, o.y)), decodeW(b + o), f.x), f.y));
+  return wl + (hb - wl) * smoothstep(0.42, 0.97, coast);
 }
 `;
 
@@ -123,7 +125,8 @@ vec3 surfacePoint(vec2 g, out float h, out vec2 uvW, out float inW, out float co
   float hs0 = h / uRadiusM * uRelief;
   float dcam = distance(uCamLocal, r * (1.0 + hs0) + uOrigin * hs0);
   float fade = 1.0 - smoothstep(0.03, 0.12, dcam);
-  h += detail(nAbs, h, smoothstep(0.5, 0.92, coast), fade);
+  float lw = smoothstep(0.5, 1.0, coast);
+  h += detail(nAbs, h, lw * lw, fade);   // relief eases in from the shore, so lake banks are not walls
   float dcamM = dcam * uRadiusM;   // no swell right around the camera: the CPU ground (walking, flying) is still water
   if (inW > 0.5) h += swell(nAbs, coast, uvW, (1.0 - smoothstep(0.004, 0.012, dcam)) * smoothstep(40.0, 160.0, dcamM)) / max(uRelief, 1.0);
   float hs = h / uRadiusM * uRelief;
@@ -251,6 +254,9 @@ void main() {
     snowL -= abs(biome - 5.0) < 0.5 ? 600.0 : 0.0;          // grey snow hatch on kiros_v5 (biomes.js)
     float treeL = snowL - 900.0;
     float under = (forest && bright < 0.45) ? (1.0 - smoothstep(uFloorDist * 0.6, uFloorDist, distM)) * (1.0 - smoothstep(treeL - 250.0, treeL, vAlt)) : 0.0;
+    // Dragon Islands cone: black rock and ash soils (spec); same box as biomes.js isVolcanic()
+    float volc = (llDeg.x > 5.0 && llDeg.x < 16.0 && llDeg.y > -32.0 && llDeg.y < -15.0) ? smoothstep(1100.0, 1300.0, vAlt) : 0.0;
+    under *= 1.0 - volc;
     // meadows and clearings: the same noise the vegetation uses to thin its big trees (vegetation.js)
     float meadow = under > 0.0 ? smoothstep(0.645, 0.675, vnoise(vec3(llDeg.x * 900.0, llDeg.y * 900.0, 7.7))) : 0.0;
     float shade = 0.0;
@@ -271,8 +277,12 @@ void main() {
     base = mix(base, sand * (0.85 + 0.3 * vnoise(vSphere * 1500000.0)), strand * 0.85);
     // steep ground sheds soil: rock on cliffs and gullies
     float slope = 1.0 - dot(N, n);
-    float rock = smoothstep(0.25, 0.45, slope) * nearL;
-    base = mix(base, vec3(0.30, 0.29, 0.27) * (0.8 + 0.4 * vnoise(vSphere * 300000.0)), rock * 0.8);
+    float rock = smoothstep(0.10, 0.30, slope) * nearL;
+    // noise in 3D (height included), so cliffs do not smear into vertical streaks
+    vec3 q3d = vSphere * (1.0 + vAlt / uRadiusM);
+    float strata = vnoise(q3d * 300000.0) * 0.6 + vnoise(q3d * vec3(60000.0, 900000.0, 60000.0)) * 0.4;
+    base = mix(base, vec3(0.31, 0.30, 0.28) * (0.72 + 0.5 * strata), rock * 0.85);
+    base = mix(base, mix(vec3(0.09, 0.085, 0.08), vec3(0.20, 0.18, 0.16), strata) * (0.85 + 0.3 * vnoise(q3d * 40000.0)), volc * nearL * 0.9);
     // snow lies above the snowline (spec table, proposed), except on the steepest rock; drifts break its lower edge
     float drift = (vnoise(vSphere * 40000.0) - 0.5) * 220.0;
     float snowK = smoothstep(snowL - 120.0, snowL + 120.0, vAlt + drift) * (1.0 - smoothstep(0.35, 0.6, slope));

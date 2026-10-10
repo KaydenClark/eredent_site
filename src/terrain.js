@@ -67,6 +67,13 @@ function taylor(face, u0, v0, size, win) {
   return { c, t, uv };
 }
 
+function waterTexture(hf) {
+  const img = hf.waterLevelImage();
+  const t = new THREE.DataTexture(img.data, img.width, img.height, THREE.RGBAFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.colorSpace = THREE.NoColorSpace; t.needsUpdate = true;
+  return t;
+}
+
 function linearCopy(t) {
   const c = t.clone(); c.minFilter = c.magFilter = THREE.LinearFilter; c.needsUpdate = true; return c;
 }
@@ -87,7 +94,7 @@ export class Terrain {
     this.material = new THREE.ShaderMaterial({
       vertexShader: TERRAIN_VERT, fragmentShader: TERRAIN_FRAG,
       uniforms: {
-        uHeight: { value: textures.height }, uHeightSize: { value: new THREE.Vector2(textures.height.image.width, textures.height.image.height) },
+        uHeight: { value: textures.height }, uWater: { value: waterTexture(heightfield) }, uHeightSize: { value: new THREE.Vector2(textures.height.image.width, textures.height.image.height) },
         uCoast: { value: textures.coast }, uCoastSize: { value: new THREE.Vector2(textures.coast.image.width, textures.coast.image.height) },
         uMask: { value: textures.mask }, uColor: { value: textures.color }, uCoastL: { value: linearCopy(textures.coast) },
         uWindow: { value: new THREE.Vector4(w.lon[0], w.lat[0], w.lon[1], w.lat[1]) }, uWindowF: { value: new THREE.Vector4(w.lon[0], w.lat[0], w.lon[1], w.lat[1]) },
@@ -112,8 +119,10 @@ export class Terrain {
   }
 
   // swap the regional data layers (terrain source switch)
-  setLayers(textures, meta) {
+  setLayers(textures, meta, hf) {
     const u = this.material.uniforms, w = meta.web.window_deg;
+    this._water = this._water || new Map();
+    if (hf) { if (!this._water.has(hf)) this._water.set(hf, waterTexture(hf)); u.uWater.value = this._water.get(hf); }
     u.uHeight.value = textures.height; u.uHeightSize.value.set(textures.height.image.width, textures.height.image.height);
     u.uCoast.value = textures.coast; u.uCoastSize.value.set(textures.coast.image.width, textures.coast.image.height);
     this._linear = this._linear || new Map();                // one linear-filtered copy per coast texture, reused

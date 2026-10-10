@@ -613,7 +613,7 @@ export function mountWorkshop(host = {}) {
       pane.textContent = '';
       app(pane, 
         h('div', { class: 'ws-pane-head' }, h('h3', {}, 'Compare versions'),
-          h('p', { class: 'ws-hint' }, 'The 3D terrain is built from the September penup outline. The Oct 10 drawing (kiros_earth_re) is newer and has much smaller lakes; it is not yet built into the terrain.')),
+          h('p', { class: 'ws-hint' }, 'The 3D terrain is built from the September penup outline. The Oct 10 drawing (kiros_earth_re) is newer and has much smaller lakes; it is built only as a what-if variant (Survey panel: "Oct 10 outline"), not as canon.')),
         drapeControls(), registered(L), lakesTable(), sideBySide(L));
     }
 

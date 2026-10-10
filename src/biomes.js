@@ -15,8 +15,12 @@ export const treeline = (lat, hatch) => snowline(lat, hatch) - 900;
 
 // The vegetation zone at a point: one of
 // tropical | mixed | taiga | alpine | tundra | snow | desert | wetland | bayou | water
-export function zoneAt(biome, lat, h, coast) {
+// Dragon Islands cone: "black rock and ash soils" (spec, Landmasses). Same box and height as the terrain shader.
+export const isVolcanic = (lat, lon, h) => lat > 5 && lat < 16 && lon > -32 && lon < -15 && h > 1200;
+
+export function zoneAt(biome, lat, h, coast, lon = null) {
   if (coast < 0.47 || biome === 0 || biome === 4) return 'water';
+  if (lon !== null && isVolcanic(lat, lon, h)) return 'volcanic';
   const hatch = biome === 5;
   const sl = snowline(lat, hatch), tl = sl - 900;
   if (h > sl) return 'snow';
@@ -33,12 +37,12 @@ export function zoneAt(biome, lat, h, coast) {
 const NAMES = {
   tropical: 'Giant tropical rainforest', mixed: 'Primeval mixed forest', taiga: 'Cold evergreen forest (taiga)',
   alpine: 'Alpine rock and scrub', tundra: 'Tundra', snow: 'Snowfield', desert: 'Desert', wetland: 'Wetland, swamp forest',
-  bayou: 'Bayou'
+  bayou: 'Bayou', volcanic: 'Volcanic rock and ash'
 };
 
-export function biomeName(sample, lat, h, coast) {
+export function biomeName(sample, lat, h, coast, lon = null) {
   const b = sample.biome;
-  const z = zoneAt(b, lat, h, coast);
+  const z = zoneAt(b, lat, h, coast, lon);
   if (z !== 'water' && coast < 0.6 && z !== 'snow') return b === 4 || h > 300 ? 'Shore' : Math.abs(lat) < 25 ? 'Beach' : 'Rocky shore';
   if (z !== 'water') return NAMES[z];
   if (b === 4) return 'Lake';
@@ -47,8 +51,9 @@ export function biomeName(sample, lat, h, coast) {
 }
 
 // Where what you see at a spot comes from, for the HUD (trace the world back to its sources).
-export function evidenceFor(sample, lat, h, coast, source = 'sept') {
-  const z = zoneAt(sample.biome, lat, h, coast);
+export function evidenceFor(sample, lat, h, coast, source = 'sept', lon = null) {
+  const z = zoneAt(sample.biome, lat, h, coast, lon);
+  if (z === 'volcanic') return 'Dragon Islands cone: spec "black rock and ash soils" · ground: Sept penup master + spec heights';
   if (z === 'water') {
     if (sample.biome === 4) return `lake outline: ${source === 'oct10' ? 'Oct 10 outline (variant)' : 'Sept penup'} blue ink · level: spec (derived/proposed)`;
     return sample.inner > 0.5 ? 'protected sea: Drive description (canon) · depth: spec (proposed)' : 'outer ocean: Drive description (canon) · depth: spec (proposed)';

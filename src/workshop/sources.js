@@ -69,7 +69,7 @@ export const SOURCES = [
     md5: '7dc4c86b258d25f6159d4b1cd4728bf7', bytes: 1303034, size: [1208, 954],
     driveUrl: 'https://drive.google.com/file/d/1gqp0lrlKjFthe5YT_0KFQ1TITyYNToSm/view', driveName: 'kiros_earth_re.png',
     date: '2026-10-10', dateBasis: 'Drive modified 2026-10-10 06:41 UTC (newest file in the folder)',
-    role: 'Newest outline revision (not yet built into the terrain)', authority: 'Newest evidence for changed geometry; not automatically canon', rank: null, status: 'disputed',
+    role: 'Newest outline revision (built only as a what-if terrain variant)', authority: 'Newest evidence for changed geometry; not automatically canon', rank: null, status: 'disputed',
     frame: 'Same pixel size as kiros_v5 (1208 × 954). Registration to the master: see Compare.',
     description: 'Hand-drawn outline with olive mountain strokes and much smaller blue lakes than the penup master; Dire Lake is drawn as a single small loop with no inner depression. The 3D terrain still uses the September penup lakes.',
     cites: ['KIROS-OVERNIGHT-BRIEF.md: "a hand-drawn outline with substantially smaller blue lakes than the existing penup-derived large lakes"', 'drive-source/manifest.json: modified 2026-10-10T06:41:32Z']

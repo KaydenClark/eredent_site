@@ -25,10 +25,29 @@ export class Heightfield {
     for (let i = 0, j = 0; i < d.length; i += 4, j++) this.hgt[j] = d[i] * 256 + d[i + 1] - 6000;
     this.w = heightImage.width; this.h = heightImage.height;
     this.lon0 = window.lon[0]; this.lon1 = window.lon[1]; this.lat0 = window.lat[0]; this.lat1 = window.lat[1];
+    // water level near shores: the lowest height in each texel's 3×3 neighbourhood, sampled bilinearly (continuous,
+    // unlike the lowest of the four texels around a point, which jumps at every texel edge)
+    const W = this.w, H = this.h, lo = new Int16Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let m = 32767;
+      for (let dy = -1; dy <= 1; dy++) { const yy = Math.min(H - 1, Math.max(0, y + dy)); for (let dx = -1; dx <= 1; dx++) { const v = this.hgt[yy * W + Math.min(W - 1, Math.max(0, x + dx))]; if (v < m) m = v; } }
+      lo[y * W + x] = m;
+    }
+    this.low = lo;
     this.mask = maskImage ? channels(pixels(maskImage), 3) : null;
     this.mw = maskImage ? maskImage.width : 0; this.mh = maskImage ? maskImage.height : 0;
     this.coast = coastImage ? channels(pixels(coastImage), 1) : null;
     this.cw = coastImage ? coastImage.width : 0; this.ch = coastImage ? coastImage.height : 0;
+  }
+
+  // the water-level field as an RGBA texture (meters + 6000 in R*256 + G), image row 0 = north like the height PNG
+  waterLevelImage() {
+    const W = this.w, H = this.h, d = new Uint8Array(W * H * 4);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = this.low[y * W + x] + 6000, i = ((H - 1 - y) * W + x) * 4;   // DataTexture rows start at the bottom
+      d[i] = v >> 8; d[i + 1] = v & 255; d[i + 3] = 255;
+    }
+    return { data: d, width: W, height: H };
   }
 
   inside(lat, lon) { return !(lon < this.lon0 || lon > this.lon1 || lat < this.lat0 || lat > this.lat1); }
@@ -62,8 +81,10 @@ export class Heightfield {
     const s = (x, y) => d[y * w + x];
     const a = s(x0, y0), b = s(x0 + 1, y0), c = s(x0, y0 + 1), e = s(x0 + 1, y0 + 1);
     const hb = (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + e * fx) * fy;
-    const coast = this.land(lat, lon), wl = Math.min(a, b, c, e);
-    return { h: wl + (hb - wl) * smoothstep(0.42, 0.8, coast), coast, water: wl };
+    const L = this.low, l = (x, y) => L[y * w + x];
+    const wl = Math.min(hb, (l(x0, y0) * (1 - fx) + l(x0 + 1, y0) * fx) * (1 - fy) + (l(x0, y0 + 1) * (1 - fx) + l(x0 + 1, y0 + 1) * fx) * fy);
+    const coast = this.land(lat, lon);
+    return { h: wl + (hb - wl) * smoothstep(0.42, 0.97, coast), coast, water: wl };
   }
 
   // solid-ground fraction 0..1 (smooth across the shoreline); 0 outside the mapped window
@@ -102,6 +123,6 @@ export function detailAt(nx, ny, nz, h, landW, fade) {
 
 // distance fade of the fine relief: full within 0.03 planet radii of the camera, gone by 0.12
 export const detailFade = distUnits => 1 - smoothstep(0.03, 0.12, distUnits);
-export const landWeight = coastFrac => smoothstep(0.5, 0.92, coastFrac);
+export const landWeight = coastFrac => { const w = smoothstep(0.5, 1.0, coastFrac); return w * w; };   // same as the shader
 
 export function smoothstep(a, b, x) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
