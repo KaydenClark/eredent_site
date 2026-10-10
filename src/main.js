@@ -183,6 +183,52 @@ const workshop = mountWorkshop({
 });
 ctx.workshop = workshop;
 
+// --- lighting looks: sunrise, midday, golden hour, a night with both moons up --------------------------------
+const LOOKS = ['sunrise', 'noon', 'golden', 'moons'];
+function applyLook(name) {
+  const { lat, lon } = rig.latLon, D = Math.PI / 180;
+  const decl = settings.tiltDeg * Math.sin(settings.season * Math.PI * 2);
+  const c = -Math.tan(lat * D) * Math.tan(decl * D);
+  const h0 = c <= -1 ? 12 : c >= 1 ? 0 : Math.acos(c) / D / 15;      // half day length, hours
+  const local = { sunrise: 12 - h0 + 0.25, noon: 12.4, golden: 12 + h0 - 0.7, moons: 12 + Math.min(h0 + 2.5, 11.5) }[name];
+  if (local === undefined) return;
+  const hour = ((local - lon / 15) % 24 + 24) % 24;
+  set({ hour, clock: false }); document.getElementById('clock').checked = false; ui.syncClock(hour);
+  if (name === 'moons') {
+    // find the soonest time both moons stand well above this horizon and are at least half lit
+    updateSun();
+    const up = dir(lat, lon), probe = { dirs: [new THREE.Vector3(), new THREE.Vector3()], light: [0, 0] };
+    let best = simDays, bestS = -1;
+    for (let d = 0; d < 60; d += 0.02) {
+      moons.update(simDays + d, sunDir, probe);
+      const a = probe.dirs[0].dot(up), b = probe.dirs[1].dot(up);
+      const la = 0.5 - 0.5 * probe.dirs[0].dot(sunDir), lb = 0.5 - 0.5 * probe.dirs[1].dot(sunDir);
+      const score = Math.min(a, b) + 0.6 * Math.min(la, lb) + 0.2 * (la + lb);
+      if (score > bestS) { bestS = score; best = simDays + d; }
+    }
+    simDays = best;
+    // turn toward the pair
+    moons.update(simDays, sunDir, probe);
+    const m = probe.dirs[0].clone().add(probe.dirs[1]).normalize();
+    const l = lon * D, p = lat * D;
+    const east = new THREE.Vector3(-Math.sin(l), 0, -Math.cos(l)), north = new THREE.Vector3(-Math.sin(p) * Math.cos(l), Math.cos(p), Math.sin(p) * Math.sin(l));
+    const heading = Math.atan2(m.dot(east), m.dot(north)) / D, pitch = Math.min(35, Math.asin(Math.min(1, m.dot(up))) / D * 0.6);
+    if (rig.nav) { rig.nav.heading = (heading + 360) % 360; rig.nav.pitch = pitch; }
+    else { rig.t.heading = rig.c.heading = heading; rig.t.pitch = rig.c.pitch = Math.max(-89, Math.min(8, pitch)); rig.manualPitch = true; }
+  }
+}
+ctx.applyLook = applyLook;
+{
+  const look = document.getElementById('look');
+  look.onchange = () => { applyLook(look.value); look.value = ''; };
+  let li = -1;
+  addEventListener('keydown', e => {
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.toLowerCase() === 'l') { li = (li + 1) % LOOKS.length; applyLook(LOOKS[li]); e.preventDefault(); }
+  });
+}
+
 // --- sound -----------------------------------------------------------------------------------------------
 const ambience = new Ambience(); ctx.ambience = ambience;
 {

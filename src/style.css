@@ -87,3 +87,18 @@ dialog#help form { margin-top: 16px; text-align: right; }
 dialog#help form button { all: unset; cursor: pointer; padding: 6px 14px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); }
 @media (max-width: 640px) { .modes kbd { display: none; } .modes button { padding: 6px 8px; } }
 .modes input[type=range] { width: 80px; accent-color: var(--shoal); align-self: center; margin: 0 6px; }
+
+dialog#welcome { max-width: min(760px, calc(100% - 32px)); background: rgba(8, 16, 24, .95); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 22px 26px; }
+dialog#welcome::backdrop { background: rgba(0, 0, 0, .35); }
+dialog#welcome h2 { margin: 0 0 8px; font: 300 30px var(--f-display); letter-spacing: .03em; }
+dialog#welcome h3 { margin: 16px 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--shoal); }
+dialog#welcome .lede { margin: 0; font: 300 16px/1.5 var(--f-display); color: var(--ink); }
+.starts { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 8px; }
+.starts button { all: unset; cursor: pointer; padding: 9px 11px; border: 1px solid var(--line); border-radius: 6px; display: grid; gap: 3px; }
+.starts button:hover, .starts button:focus-visible { background: rgba(126, 201, 187, .12); outline: 1px solid var(--shoal); }
+.starts b { font-weight: 500; font-size: 13.5px; } .starts span { font-size: 12px; color: var(--mist); }
+.welcome-row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 14px; font-size: 13px; color: var(--mist); }
+.welcome-row button, dialog#welcome form button { all: unset; cursor: pointer; padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); font-size: 13px; }
+.welcome-row button:focus-visible, dialog#welcome form button:focus-visible { outline: 2px solid var(--shoal); }
+dialog#welcome .note { margin: 14px 0 0; font-size: 12px; color: var(--mist); }
+dialog#welcome form { margin-top: 12px; text-align: right; }

@@ -55,11 +55,34 @@ export function makeClouds(tex, radiusKm) {
   return mesh;
 }
 
+// Moons are lit by the sun directly (not by the scene's sunlight, which dims at night for the ground's sake).
+function moonMaterial(map, sunDir) {
+  return new THREE.ShaderMaterial({
+    uniforms: { map: { value: map }, uSunDir: { value: sunDir } },
+    vertexShader: `varying vec2 vUv; varying vec3 vN;
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
+      void main() { vUv = uv; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      #include <logdepthbuf_vertex>
+      }`,
+    fragmentShader: `uniform sampler2D map; uniform vec3 uSunDir; varying vec2 vUv; varying vec3 vN;
+      #include <common>
+      #include <logdepthbuf_pars_fragment>
+      void main() {
+        #include <logdepthbuf_fragment>
+        vec3 c = texture2D(map, vUv).rgb * (max(dot(normalize(vN), uSunDir), 0.0) * 1.25 + 0.015);
+        gl_FragColor = vec4(c / (1.0 + c * 0.2), 1.0);
+        #include <colorspace_fragment>
+      }`
+  });
+}
+
 export class Moons {
   constructor(textures) {
     this.group = new THREE.Group();
+    this.sunDir = new THREE.Vector3(1, 0, 0);
     this.bodies = MOONS.map((m, i) => {
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: textures[i], roughness: 1, metalness: 0 }));
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), moonMaterial(textures[i], this.sunDir));
       mesh.userData.spec = m; this.group.add(mesh); return mesh;
     });
   }
@@ -67,13 +90,14 @@ export class Moons {
   configure(radiusKm) { for (const b of this.bodies) b.scale.setScalar(b.userData.spec.radiusKm / radiusKm); }
   // days = simulated time in days; returns light factors for the terrain shader
   update(days, sunDir, out) {
+    this.sunDir.copy(sunDir);
     this.bodies.forEach((b, i) => {
       const s = b.userData.spec, a = (days / s.periodDays) * Math.PI * 2 + s.phase0;
       const lat = s.inclination * Math.sin(a), lon = THREE.MathUtils.radToDeg(a);
       dir(lat, lon, b.position).multiplyScalar(s.orbitRadii);
       b.rotation.y = a;
       const d = b.position.clone().normalize();
-      const lit = 0.5 + 0.5 * d.dot(sunDir);                    // illuminated fraction as seen from the planet
+      const lit = 0.5 - 0.5 * d.dot(sunDir);                    // illuminated fraction seen from the planet: full when opposite the sun
       const ang = (s.radiusKm / radiusKmCache) / s.orbitRadii;    // apparent size relative to our Moon's
       out.dirs[i].copy(d); out.light[i] = lit * lit * 0.12 * Math.min(1, ang / 0.0045);
     });

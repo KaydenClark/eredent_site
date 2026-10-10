@@ -2,7 +2,7 @@ import { set, settings } from './settings.js';
 import { fmtHour } from './panel.js';
 
 // Mode bar, help, on-screen movement pad and the pointer-lock hint.
-export function initUi({ rig, places, goPlace }) {
+export function initUi({ rig, ctx, places, goPlace }) {
   const $ = id => document.getElementById(id);
   const buttons = { survey: $('m-survey'), walk: $('m-walk'), fly: $('m-fly') };
   const pad = $('pad'), hint = $('hint'), help = $('help');
@@ -52,8 +52,16 @@ export function initUi({ rig, places, goPlace }) {
   document.addEventListener('pointerlockchange', showHint);
   document.body.dataset.mode = 'survey';
 
-  // first visit: show the controls once
-  try { if (!localStorage.getItem('kiros.seenHelp')) { localStorage.setItem('kiros.seenHelp', '1'); setTimeout(() => help.showModal(), 900); } } catch {}
+  // welcome with quick starts, at start unless the visitor turned it off
+  const welcome = $('welcome'), skip = $('w-skip');
+  let skipped = false; try { skipped = localStorage.getItem('kiros.skipWelcome') === '1'; } catch {}
+  skip.checked = skipped;
+  skip.onchange = () => { try { localStorage.setItem('kiros.skipWelcome', skip.checked ? '1' : '0'); } catch {} };
+  for (const b of welcome.querySelectorAll('[data-go]')) b.onclick = () => { welcome.close(); goPlace(b.dataset.go); };
+  $('w-workshop').onclick = () => { welcome.close(); ctx.workshop?.open(); };
+  $('w-help').onclick = () => { welcome.close(); help.showModal(); };
+  $('m-explore').onclick = () => welcome.showModal();
+  if (!skipped && !new URLSearchParams(location.search).has('nowelcome')) setTimeout(() => { if (!document.querySelector('dialog[open]')) welcome.showModal(); }, 600);
 
   const hourEl = $('hour'), hourOut = $('hour-out');
   return {
