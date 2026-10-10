@@ -12,7 +12,6 @@ import { initUi } from './ui.js';
 import { Vegetation } from './vegetation.js';
 import { Ambience } from './audio.js';
 import { Dragons } from './dragons.js';
-import { mountWorkshop } from './workshop/workshop.js';
 import { zoneAt } from './biomes.js';
 
 // Logarithmic depth with a scale: the scene unit is a planet radius, so everything near the ground is a tiny
@@ -102,15 +101,21 @@ async function loadVariant(name) {
   const t = { ...tex, color, height, mask, coast };
   return { tex: t, meta: m, hf: new Heightfield(height.image, m.web.window_deg, mask.image, coast.image) };
 }
+let sourceReq = 0;
 ctx.setTerrainSource = async name => {
+  const req = ++sourceReq;
   if (!terrainSets[name]) terrainSets[name] = loadVariant(name);
   let set;
   try { set = await terrainSets[name]; } catch (e) { delete terrainSets[name]; throw e; }
+  if (req !== sourceReq) return false;                      // a later switch won
   heightfield = set.hf; ctx.heightfield = set.hf; terrain.hf = set.hf; vegetation.hf = set.hf;
   terrain.setLayers(set.tex, set.meta);
   ctx.terrainSource = name; vegetation.clear();
   for (const [id, v] of [['ts-sept', 'sept'], ['ts-oct10', 'oct10']]) document.getElementById(id)?.setAttribute('aria-pressed', String(name === v));
   if (rig.nav) rig.setMode(rig.mode, { force: true });     // stand on the new ground
+  const note = document.getElementById('ts-note');
+  if (note) { note.hidden = name !== 'oct10'; note.textContent = name === 'oct10' ? 'Showing the Oct 10 outline built as a variant: its lakes and mountain marks, the same coastline. A what-if for comparison, not a canon decision. See docs/oct10-variant.md.' : ''; }
+  return true;
 };
 
 function applyPlanet() {
@@ -167,10 +172,13 @@ function faceHeading(lat, lon, how) {
   }
   return best;
 }
+let placeReq = 0;
 const goPlace = async id => {
   const p = placeById(id); if (!p) return;
+  const req = ++placeReq;
   // places tied to one terrain source switch to it (the Oct 10 lake only exists in the variant)
-  if (p.terrain && ctx.terrainSource !== p.terrain) { try { await ctx.setTerrainSource(p.terrain); } catch { return; } }
+  if (p.terrain && ctx.terrainSource !== p.terrain) { try { if (!(await ctx.setTerrainSource(p.terrain))) return; } catch { return; } }
+  if (req !== placeReq) return;                             // the visitor already went somewhere else
   const v = { ...p.view };
   let faced = false;
   if (v.mode === 'walk' && heightfield.land(v.lat, v.lon) < 0.5) {   // a walking start in water: go to the nearest shore, face the water
@@ -216,23 +224,30 @@ ctx.setOverlay = (name, opacity = 0.85) => {
   if (!file) return Promise.resolve();
   const p = overlays[name] || (overlays[name] = loadTex(file, { srgb: true }).then(t => { t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.needsUpdate = true; return t; }));
   return p.then(t => { u.uOverlay.value = t; u.uOverlayOn.value = opacity; ctx.overlay = { name, opacity }; })
-    .catch(() => { u.uOverlayOn.value = 0; console.warn('overlay not available:', file); });
+    .catch(() => { u.uOverlayOn.value = 0; delete overlays[name]; console.warn('overlay not available:', file); });
 };
 bindPanel({ flyTo: goPlace, places: PLACES, scenic: SCENIC });
 const ui = initUi({ rig, ctx, places: PLACES, goPlace });
 const ALL_PLACES = [...SCENIC, ...PLACES];
-const workshop = mountWorkshop({
-  getView: () => rig.view,
-  flyTo: view => { const p = ALL_PLACES.find(q => q.view === view); p ? goPlace(p.id) : rig.goTo(view); },
-  places: ALL_PLACES,
-  setOverlay: (name, opacity) => ctx.setOverlay(name, opacity),
-  onOpenChange: open => { document.body.classList.toggle('ws-open', open); if (open && document.pointerLockElement) document.exitPointerLock(); rig.keys.blur(); }
-});
+// The workshop shows Kayden's private source maps and lore, so it only runs from the local dev server: a production
+// build (GitHub Pages) leaves the module, its thumbnails and the Drive references out entirely.
+let workshop = { open() { alert('The workshop runs on the local dev server only (npm run dev), so the private sources stay off the public site.'); }, close() {}, isOpen: () => false };
+if (import.meta.env.DEV) {
+  const { mountWorkshop } = await import('./workshop/workshop.js');
+  workshop = mountWorkshop({
+    getView: () => rig.view,
+    flyTo: view => { const p = ALL_PLACES.find(q => q.view === view); p ? goPlace(p.id) : rig.goTo(view); },
+    places: ALL_PLACES,
+    setOverlay: (name, opacity) => ctx.setOverlay(name, opacity),
+    onOpenChange: open => { document.body.classList.toggle('ws-open', open); if (open && document.pointerLockElement) document.exitPointerLock(); rig.keys.blur(); }
+  });
+}
 ctx.workshop = workshop;
 {
   const a = document.getElementById('ts-sept'), b = document.getElementById('ts-oct10'), note = document.getElementById('ts-note');
   const sync = () => { a.setAttribute('aria-pressed', String(ctx.terrainSource === 'sept')); b.setAttribute('aria-pressed', String(ctx.terrainSource === 'oct10')); };
   const go = async name => {
+    placeReq++;                                            // cancels a pending quick start
     note.hidden = false; note.textContent = 'Loading…';
     try {
       await ctx.setTerrainSource(name);
@@ -285,7 +300,8 @@ ctx.applyLook = applyLook;
   let li = -1;
   addEventListener('keydown', e => {
     const tag = e.target && e.target.tagName;
-    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || e.target?.isContentEditable || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    if (document.querySelector('dialog[open]')) return;
     if (e.key.toLowerCase() === 'l') { li = (li + 1) % LOOKS.length; applyLook(LOOKS[li]); e.preventDefault(); }
     if (e.key.toLowerCase() === 'b' && !workshop.isOpen()) {         // bookmark this view: opens the notebook's form
       if (document.pointerLockElement) document.exitPointerLock();
@@ -416,7 +432,7 @@ function frame(forcedDt) {
     const ll = rig.latLon, coast = heightfield.land(ll.lat, ll.lon), smp = heightfield.sample(ll.lat, ll.lon);
     const shore = coast >= 0.47 ? 1 - THREE.MathUtils.smoothstep(coast, 0.47, 0.66) : THREE.MathUtils.smoothstep(coast, 0.2, 0.47) * (smp.inner > 0.5 ? 0.6 : 1);
     const v = rig.nav ? Math.hypot(rig.nav.vel.e, rig.nav.vel.n, rig.nav.vel.u) : 0;
-    ambience.update(dt, { zone: heightfield.inside(ll.lat, ll.lon) ? zoneAt(smp.biome, ll.lat, ground, coast) : 'water', agl: alt, shore, day: dayK, altitude: asl, speed: v });
+    ambience.update(dt, { zone: heightfield.inside(ll.lat, ll.lon) ? zoneAt(smp.biome, ll.lat, ground / settings.relief, coast) : 'water', agl: alt, shore, day: dayK, altitude: asl, speed: v });
   }
   renderer.render(scene, camera);
 
@@ -426,9 +442,9 @@ function frame(forcedDt) {
     hudT = 0;
     const ll = rig.latLon;
     const s = heightfield.sample(ll.lat, ll.lon);
-    const where = heightfield.inside(ll.lat, ll.lon) ? biomeName(s, ll.lat, ground, heightfield.land(ll.lat, ll.lon)) : 'open ocean';
+    const where = heightfield.inside(ll.lat, ll.lon) ? biomeName(s, ll.lat, ground / settings.relief, heightfield.land(ll.lat, ll.lon)) : 'open ocean';
     const modeLine = rig.mode === 'survey' ? 'Survey' : `${rig.mode === 'walk' ? 'Walking' : 'Flying'} · speed ${fmtSpeed(rig.speedMul)}`;
-    const ev = heightfield.inside(ll.lat, ll.lon) ? evidenceFor(s, ll.lat, ground, heightfield.land(ll.lat, ll.lon), ctx.terrainSource) : 'open ocean beyond the mapped window';
+    const ev = heightfield.inside(ll.lat, ll.lon) ? evidenceFor(s, ll.lat, ground / settings.relief, heightfield.land(ll.lat, ll.lon), ctx.terrainSource) : 'open ocean beyond the mapped window';
     setHud(`${modeLine}\n${fmtAlt(alt)} above ground · ${fmtAlt(ground)} elevation\n${where}\n${ev}\n${fmtLat(ll.lat)} ${fmtLon(ll.lon)} · ${planet().key === 'small' ? 'small world' : 'Earth-sized'}\n${terrain.count} tiles · ${fps.toFixed(0)} fps`);
     ctx.fps = fps;
   }

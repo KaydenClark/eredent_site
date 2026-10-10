@@ -17,8 +17,10 @@ export function initUi({ rig, ctx, places, goPlace }) {
 
   addEventListener('keydown', e => {
     const tag = e.target && e.target.tagName;
-    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === 'Home') { reset(); e.preventDefault(); }
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || e.target?.isContentEditable || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    const dlg = document.querySelector('dialog[open]');
+    if (dlg && dlg !== help) return;
+    if (e.key === 'Home' && !dlg) { reset(); e.preventDefault(); }
     else if (e.key.toLowerCase() === 'h' || e.key === '?') { help.open ? help.close() : help.showModal(); e.preventDefault(); }
   });
 
@@ -51,6 +53,11 @@ export function initUi({ rig, ctx, places, goPlace }) {
   });
   document.addEventListener('pointerlockchange', showHint);
   document.body.dataset.mode = 'survey';
+
+  // selects and sliders give the keyboard back after a change, so arrows and letters move the camera again
+  for (const el of document.querySelectorAll('#panel select, #panel input[type=range], .modes input[type=range]')) {
+    el.addEventListener('change', () => { el.blur(); rig.dom.focus?.(); });
+  }
 
   // welcome with quick starts, at start unless the visitor turned it off
   const welcome = $('welcome'), skip = $('w-skip');

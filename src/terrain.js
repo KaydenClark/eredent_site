@@ -116,7 +116,9 @@ export class Terrain {
     const u = this.material.uniforms, w = meta.web.window_deg;
     u.uHeight.value = textures.height; u.uHeightSize.value.set(textures.height.image.width, textures.height.image.height);
     u.uCoast.value = textures.coast; u.uCoastSize.value.set(textures.coast.image.width, textures.coast.image.height);
-    u.uCoastL.value = linearCopy(textures.coast); u.uMask.value = textures.mask; u.uColor.value = textures.color;
+    this._linear = this._linear || new Map();                // one linear-filtered copy per coast texture, reused
+    if (!this._linear.has(textures.coast)) this._linear.set(textures.coast, linearCopy(textures.coast));
+    u.uCoastL.value = this._linear.get(textures.coast); u.uMask.value = textures.mask; u.uColor.value = textures.color;
     u.uWindow.value.set(w.lon[0], w.lat[0], w.lon[1], w.lat[1]); u.uWindowF.value.copy(u.uWindow.value);
     this.win = [w.lon[0], w.lat[0], w.lon[1], w.lat[1]]; this.cache.clear();
   }

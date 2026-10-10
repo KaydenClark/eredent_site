@@ -124,7 +124,8 @@ vec3 surfacePoint(vec2 g, out float h, out vec2 uvW, out float inW, out float co
   float dcam = distance(uCamLocal, r * (1.0 + hs0) + uOrigin * hs0);
   float fade = 1.0 - smoothstep(0.03, 0.12, dcam);
   h += detail(nAbs, h, smoothstep(0.5, 0.92, coast), fade);
-  if (inW > 0.5) h += swell(nAbs, coast, uvW, 1.0 - smoothstep(0.004, 0.012, dcam)) / max(uRelief, 1.0);
+  float dcamM = dcam * uRadiusM;   // no swell right around the camera: the CPU ground (walking, flying) is still water
+  if (inW > 0.5) h += swell(nAbs, coast, uvW, (1.0 - smoothstep(0.004, 0.012, dcam)) * smoothstep(40.0, 160.0, dcamM)) / max(uRelief, 1.0);
   float hs = h / uRadiusM * uRelief;
   return r * (1.0 + hs) + uOrigin * hs;
 }
@@ -246,8 +247,9 @@ void main() {
     vec2 llDeg = vec2(uWindowF.y + vUvW.y * (uWindowF.w - uWindowF.y), uWindowF.x + vUvW.x * (uWindowF.z - uWindowF.x));
     // treeline from the spec's snowline table (biomes.js): no forest floor above it
     float al = abs(llDeg.x);
-    float snowL = al < 30.0 ? mix(5000.0, 4000.0, al / 30.0) : al < 45.0 ? mix(4000.0, 2900.0, (al - 30.0) / 15.0) : al < 60.0 ? mix(2900.0, 1650.0, (al - 45.0) / 15.0) : mix(1650.0, 600.0, clamp((al - 60.0) / 15.0, 0.0, 1.0));
-    float treeL = snowL - 900.0 - (abs(biome - 5.0) < 0.5 ? 600.0 : 0.0);
+    float snowL = al < 30.0 ? mix(5000.0, 4000.0, al / 30.0) : al < 45.0 ? mix(4000.0, 2900.0, (al - 30.0) / 15.0) : al < 60.0 ? mix(2900.0, 1650.0, (al - 45.0) / 15.0) : al < 75.0 ? mix(1650.0, 600.0, (al - 60.0) / 15.0) : mix(600.0, 0.0, clamp((al - 75.0) / 15.0, 0.0, 1.0));
+    snowL -= abs(biome - 5.0) < 0.5 ? 600.0 : 0.0;          // grey snow hatch on kiros_v5 (biomes.js)
+    float treeL = snowL - 900.0;
     float under = (forest && bright < 0.45) ? (1.0 - smoothstep(uFloorDist * 0.6, uFloorDist, distM)) * (1.0 - smoothstep(treeL - 250.0, treeL, vAlt)) : 0.0;
     // meadows and clearings: the same noise the vegetation uses to thin its big trees (vegetation.js)
     float meadow = under > 0.0 ? smoothstep(0.645, 0.675, vnoise(vec3(llDeg.x * 900.0, llDeg.y * 900.0, 7.7))) : 0.0;

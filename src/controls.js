@@ -175,11 +175,12 @@ export class CameraRig {
     }, { passive: false });
     addEventListener('blur', () => this.keys.blur());
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.keys.blur(); });
-    addEventListener('keyup', e => this.keys.up(e.code));
+    addEventListener('keyup', e => this.keys.up(e.code), true);   // capture: a panel that stops keyup cannot leave a key stuck
     addEventListener('keydown', e => {
       const tag = e.target && e.target.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (document.querySelector('dialog[open]')) return;          // help or welcome is in front
       const k = e.key.toLowerCase();
       if (k === 'g') { this.mode === 'walk' ? this.setMode('survey', { rise: true }) : this.landAtCenter('walk'); e.preventDefault(); return; }
       if (k === 'v') { this.mode === 'fly' ? this.setMode('survey') : (this.mode === 'walk' ? this.setMode('fly') : this.landAtCenter('fly')); e.preventDefault(); return; }
