@@ -243,9 +243,13 @@ void main() {
     }
     // close to the camera the ground is seen from under the trees: forest floor, moss and litter, not canopy
     bool forest = abs(biome - 1.0) < 0.5 || abs(biome - 3.0) < 0.5 || abs(biome - 6.0) < 0.5;
-    float under = (forest && bright < 0.45) ? 1.0 - smoothstep(uFloorDist * 0.6, uFloorDist, distM) : 0.0;
-    // meadows and clearings: the same noise the vegetation uses to thin its big trees (vegetation.js)
     vec2 llDeg = vec2(uWindowF.y + vUvW.y * (uWindowF.w - uWindowF.y), uWindowF.x + vUvW.x * (uWindowF.z - uWindowF.x));
+    // treeline from the spec's snowline table (biomes.js): no forest floor above it
+    float al = abs(llDeg.x);
+    float snowL = al < 30.0 ? mix(5000.0, 4000.0, al / 30.0) : al < 45.0 ? mix(4000.0, 2900.0, (al - 30.0) / 15.0) : al < 60.0 ? mix(2900.0, 1650.0, (al - 45.0) / 15.0) : mix(1650.0, 600.0, clamp((al - 60.0) / 15.0, 0.0, 1.0));
+    float treeL = snowL - 900.0 - (abs(biome - 5.0) < 0.5 ? 600.0 : 0.0);
+    float under = (forest && bright < 0.45) ? (1.0 - smoothstep(uFloorDist * 0.6, uFloorDist, distM)) * (1.0 - smoothstep(treeL - 250.0, treeL, vAlt)) : 0.0;
+    // meadows and clearings: the same noise the vegetation uses to thin its big trees (vegetation.js)
     float meadow = under > 0.0 ? smoothstep(0.645, 0.675, vnoise(vec3(llDeg.x * 900.0, llDeg.y * 900.0, 7.7))) : 0.0;
     float shade = 0.0;
     if (under > 0.0) {
@@ -267,6 +271,10 @@ void main() {
     float slope = 1.0 - dot(N, n);
     float rock = smoothstep(0.25, 0.45, slope) * nearL;
     base = mix(base, vec3(0.30, 0.29, 0.27) * (0.8 + 0.4 * vnoise(vSphere * 300000.0)), rock * 0.8);
+    // snow lies above the snowline (spec table, proposed), except on the steepest rock; drifts break its lower edge
+    float drift = (vnoise(vSphere * 40000.0) - 0.5) * 220.0;
+    float snowK = smoothstep(snowL - 120.0, snowL + 120.0, vAlt + drift) * (1.0 - smoothstep(0.35, 0.6, slope));
+    base = mix(base, vec3(0.86, 0.88, 0.92) * (0.92 + 0.08 * vnoise(vSphere * 900000.0)), snowK * (vIn > 0.5 ? 1.0 : 0.0));
     float diff = max(dot(N, uSunDir), 0.0) * (1.0 - shade);
     float sky = (0.5 + 0.5 * dot(N, n)) * (1.0 - shade * 0.6);   // slopes facing the sky get more of it
     vec3 skyLight = mix(vec3(0.02, 0.03, 0.06), vec3(0.22, 0.30, 0.42), day) * sky;

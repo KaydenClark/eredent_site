@@ -185,8 +185,10 @@ const goPlace = async id => {
     for (let i = -12; i <= 12; i++) for (let j = -12; j <= 12; j++) {
       const la = v.lat + i * 200 / R / D, lo = v.lon + j * 200 / (R * Math.cos(v.lat * D)) / D, h = terrain.groundAt(la, lo);
       for (let a = 0; a < 360; a += 30) {
-        const l2 = la + Math.cos(a * D) * 2500 / R / D, o2 = lo + Math.sin(a * D) * 2500 / (R * Math.cos(la * D)) / D;
-        const drop = h - terrain.groundAt(l2, o2) + 0.15 * h;
+        const at = m => terrain.groundAt(la + Math.cos(a * D) * m / R / D, lo + Math.sin(a * D) * m / (R * Math.cos(la * D)) / D);
+        const near = h - at(300), mid = h - at(900);
+        if (near < 15 || mid < near) continue;                        // the ground must fall away from the feet
+        const drop = h - at(2500) + 2 * near + 0.15 * h;
         if (drop > best) { best = drop; v.lat = la; v.lon = lo; v.heading = a; }
       }
     }
