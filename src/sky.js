@@ -48,9 +48,9 @@ export class Atmosphere {
 }
 
 export function makeClouds(tex, radiusKm) {
-  const m = new THREE.MeshLambertMaterial({ color: 0xffffff, map: tex, transparent: true, depthWrite: false, opacity: 0.72 });
+  const m = new THREE.MeshLambertMaterial({ color: 0xffffff, map: tex, transparent: true, depthWrite: false, opacity: 0.72, side: THREE.DoubleSide });   // seen from below too
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 64), m);
-  mesh.renderOrder = 2;
+  mesh.renderOrder = 2; mesh.frustumCulled = false;
   mesh.scale.setScalar(1 + 9000 / (radiusKm * 1000));     // cloud deck about 9 km up
   return mesh;
 }

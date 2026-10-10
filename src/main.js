@@ -7,7 +7,7 @@ import { Terrain } from './terrain.js';
 import { Atmosphere, Moons, makeClouds, makeStars, makeSun, setMoonRadiusCache, skyRadiance } from './sky.js';
 import { bindPanel, updateStats, setHud } from './panel.js';
 import { PLACES, SCENIC, placeById } from './places.js';
-import { biomeName } from './biomes.js';
+import { biomeName, evidenceFor } from './biomes.js';
 import { initUi } from './ui.js';
 import { Vegetation } from './vegetation.js';
 import { Ambience } from './audio.js';
@@ -26,7 +26,10 @@ const BASE = import.meta.env.BASE_URL;
 const status = document.getElementById('status');
 const canvas = document.getElementById('view');
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' }); }
+catch (e) { status.textContent = 'Kiros needs WebGL 2 with hardware acceleration. Turn on graphics acceleration in the browser settings and reload.'; throw e; }
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); status.hidden = false; status.textContent = 'The graphics context was lost (driver reset or memory pressure). Reload the page to continue; your notes are saved.'; });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2) * settings.quality);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NoToneMapping;
@@ -353,7 +356,8 @@ function frame(forcedDt) {
     const s = heightfield.sample(ll.lat, ll.lon);
     const where = heightfield.inside(ll.lat, ll.lon) ? biomeName(s, ll.lat, ground, heightfield.land(ll.lat, ll.lon)) : 'open ocean';
     const modeLine = rig.mode === 'survey' ? 'Survey' : `${rig.mode === 'walk' ? 'Walking' : 'Flying'} · speed ${fmtSpeed(rig.speedMul)}`;
-    setHud(`${modeLine}\n${fmtAlt(alt)} above ground · ${fmtAlt(ground)} elevation\n${where}\n${fmtLat(ll.lat)} ${fmtLon(ll.lon)}\n${terrain.count} tiles · ${fps.toFixed(0)} fps`);
+    const ev = heightfield.inside(ll.lat, ll.lon) ? evidenceFor(s, ll.lat, ground, heightfield.land(ll.lat, ll.lon)) : 'open ocean beyond the mapped window';
+    setHud(`${modeLine}\n${fmtAlt(alt)} above ground · ${fmtAlt(ground)} elevation\n${where}\n${ev}\n${fmtLat(ll.lat)} ${fmtLon(ll.lon)} · ${planet().key === 'small' ? 'small world' : 'Earth-sized'}\n${terrain.count} tiles · ${fps.toFixed(0)} fps`);
     ctx.fps = fps;
   }
 }
