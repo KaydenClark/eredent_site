@@ -27,6 +27,8 @@ export const defaults = {
   clouds: true,
   moons: true,
   detail: true,           // fractal detail below the data resolution (about 50 m per sample)
+  trees: true,            // instanced Pandora-scale forest
+  creatures: true,        // dragons, birds, grazers, sea giants, fireflies
   quality: 1.0            // LOD budget multiplier
 };
 

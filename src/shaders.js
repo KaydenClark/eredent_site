@@ -7,6 +7,12 @@ float vnoise(vec3 p) {
   return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
              mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), f.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
 }
+// proposed: meadows a few hundred meters across, mainly in the mid latitudes, kept open by fire, windthrow and the
+// big grazers. 0 = closed forest, 1 = open grass. n = unit sphere position, lat in degrees.
+float meadowNoise(vec3 n, float lat) {
+  float w = smoothstep(14.0, 24.0, abs(lat)) * (1.0 - smoothstep(56.0, 64.0, abs(lat)));
+  return smoothstep(0.63, 0.69, vnoise(n * 2600.0 + 7.0) * 0.65 + vnoise(n * 11000.0) * 0.35) * w;
+}
 `;
 
 // Shared by vertex and fragment: window lookup and 16-bit height decode.
@@ -24,24 +30,11 @@ float sampleH(vec2 uv) {
 }
 `;
 
-export const TERRAIN_VERT = /* glsl */`
-precision highp float;
-attribute vec2 aGrid; attribute float aSkirt;
-attribute vec4 aTile;          // u0, v0, size, depth   (instance)
-attribute float aFace;         // cube face             (instance)
-uniform float uRelief, uDetail, uGridN;
-uniform sampler2D uMask;
-varying vec3 vNormal, vWorld, vSphere; varying vec2 vUvW; varying float vIn, vDepth, vAlt;
-#include <common>
-#include <logdepthbuf_pars_vertex>
-${GLSL_GEO}
-${GLSL_NOISE}
-${GLSL_LAYERS}
-
-// no clamp here: neighbour samples just past the tile edge keep the normals continuous across tiles
-vec3 tileDir(vec2 g) { vec2 st = aTile.xy + g * aTile.z; return normalize(spherify(cubePoint(aFace, st * 2.0 - 1.0))); }
-
-// fractal relief below the data resolution: ~4 km, 850 m, 210 m and 53 m wavelengths on the small world. Land only.
+// Fractal relief below the data resolution, and the clearing field. Shared by the terrain and everything
+// scattered on it (trees, creatures), so they all stand on the same ground.
+export const GLSL_DETAIL = /* glsl */`
+uniform float uRelief, uDetail;
+// ~4 km, 850 m, 210 m and 53 m wavelengths on the small world. Land only.
 // Faded by distance to the camera (continuous across tile edges), never by tile level.
 float detail(vec3 n, float h, float land, float fade) {
   if (fade <= 0.0 || land < 0.5) return 0.0;
@@ -53,6 +46,27 @@ float detail(vec3 n, float h, float land, float fade) {
           + (vnoise(n * 32000.0) - 0.5) * 8.0;
   return d * fade * uDetail;
 }
+// proposed: natural clearings from fire, windthrow and megafauna grazing. 0 = closed forest, 1 = open ground
+float clearingNoise(vec3 n) { return smoothstep(0.62, 0.72, vnoise(n * 9000.0) * 0.6 + vnoise(n * 54000.0) * 0.4); }
+`;
+
+export const TERRAIN_VERT = /* glsl */`
+precision highp float;
+attribute vec2 aGrid; attribute float aSkirt;
+attribute vec4 aTile;          // u0, v0, size, depth   (instance)
+attribute float aFace;         // cube face             (instance)
+uniform float uGridN;
+uniform sampler2D uMask;
+varying vec3 vNormal, vWorld, vSphere; varying vec2 vUvW; varying float vIn, vDepth, vAlt;
+#include <common>
+#include <logdepthbuf_pars_vertex>
+${GLSL_GEO}
+${GLSL_NOISE}
+${GLSL_LAYERS}
+${GLSL_DETAIL}
+
+// no clamp here: neighbour samples just past the tile edge keep the normals continuous across tiles
+vec3 tileDir(vec2 g) { vec2 st = aTile.xy + g * aTile.z; return normalize(spherify(cubePoint(aFace, st * 2.0 - 1.0))); }
 
 vec3 surfacePoint(vec2 g, out float h, out vec2 uvW, out float inW) {
   vec3 n = tileDir(g);
@@ -90,6 +104,7 @@ uniform sampler2D uColor, uMask, uCoast;
 uniform vec3 uSunDir, uSunColor, uAbyss;
 uniform vec3 uMoonDir[2]; uniform float uMoonLight[2];
 uniform float uTime, uExposure;
+uniform vec4 uWindow;          // lon0, lat0, lon1, lat1 (deg)
 varying vec3 vNormal, vWorld, vSphere; varying vec2 vUvW; varying float vIn, vDepth, vAlt;
 #include <common>
 #include <logdepthbuf_pars_fragment>
@@ -149,6 +164,11 @@ void main() {
       base *= mix(1.0, tex, near);
       float clearing = smoothstep(0.62, 0.72, m1 * 0.6 + m2 * 0.4) * (1.0 - amp) * near;   // proposed: natural clearings
       base = mix(base, base * vec3(1.25, 1.2, 0.85), clearing * 0.5);
+    }
+    if (abs(biome - 1.0) < 0.5) {                               // meadows in the forest: grass, not canopy
+      float lat = uWindow.y + vUvW.y * (uWindow.w - uWindow.y);
+      float meadow = meadowNoise(vSphere, lat) * (1.0 - smoothstep(0.03, 0.09, length(cameraPosition - vWorld)));
+      base = mix(base, base * vec3(1.45, 1.3, 0.75) + vec3(0.03, 0.03, 0.0), meadow * 0.7);
     }
     float diff = max(dot(N, uSunDir), 0.0);
     float sky = 0.5 + 0.5 * dot(N, n);                        // slopes facing the sky get more of it

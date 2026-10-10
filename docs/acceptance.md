@@ -21,8 +21,8 @@ The checks from the spec's "Build requirements" section, and where each one stan
 | 1. Data layers on the penup master grid, fractal detail to about 50 m, planet size as a setting | Done. Layers rebuild from `pipeline/`; detail below the data resolution is added on the GPU (wavelengths 4 km, 850 m, 210 m, 53 m on the small world), faded by distance. Planet size is a toggle. |
 | 2. Orbital globe: atmosphere, ocean by depth, clouds, day and night, two moons to scale | Done. Single-scattering atmosphere, sun by time of day and season, ocean colored and shaded by depth and protection, cloud deck, moons sized to the chosen planet with phases. |
 | 3. Seamless descent to 1 km with no visible popping | Done to a few hundred meters. One chunked level-of-detail sphere (cube-sphere quadtree, 32×32 cells per tile, skirts) from orbit to the ground; splits are screen-size driven and the finest tiles go nearest the camera. |
-| 4. Ground level: walk and fly cameras, instanced vegetation, shoreline and waves | Not started. The data resolution (about 1.1 km per sample) means the ground still reads as painted terrain, not trees. |
-| 5. Life and sound | Not started. |
+| 4. Ground level: walk and fly cameras, instanced vegetation, shoreline and waves | Vegetation done: GPU-instanced Pandora-scale forest for every biome, placed from the height, biome and coast layers with the terrain's fractal detail, so the trees stand on the drawn ground (`src/vegetation.js`). Canopy heights, bands, palm shores, meadows and clearings are the spec's proposed numbers, editable at the top of the shaders. Walk and fly cameras, shoreline and wave detail: not started. |
+| 5. Life and sound | Life done, sound not started. Dragons over the coasts and the open ocean (busiest at dawn and dusk, nearly absent at night), bird flocks over forest and shore, grazing megafauna in the mid-latitude meadows, sea giants surfacing in the protected inner seas (rarer, bigger things in the outer ocean), fireflies under the tropical and swamp canopy at night (`src/fauna.js`). Nothing made by people. |
 
 ## Findings for Kayden
 
