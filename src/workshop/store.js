@@ -58,8 +58,20 @@ function checkNumber(errs, where, v, min, max) {
   else if (v < min || v > max) errs.push(`${where}: ${v} is outside ${min}..${max}`);
 }
 
+// Times are ISO 8601 UTC, the form Date#toISOString writes. Milliseconds may be left out in a hand-written file;
+// stored items always carry the canonical form so that string sorting and comparisons by `updated` are correct.
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+function isoDate(v) {
+  if (typeof v !== 'string' || !ISO_RE.test(v)) return null;
+  const t = Date.parse(v);
+  if (!Number.isFinite(t)) return null;
+  const canonical = new Date(t).toISOString();
+  return canonical.slice(0, 19) === v.slice(0, 19) ? canonical : null; // rejects rolled-over dates such as Feb 30
+}
+const timeOf = v => Date.parse(v);
+
 function checkDate(errs, where, v) {
-  if (typeof v !== 'string' || v.length > 40 || !Number.isFinite(Date.parse(v))) errs.push(`${where}: must be an ISO date`);
+  if (!isoDate(v)) errs.push(`${where}: must be an ISO 8601 UTC time like 2026-10-10T08:00:00.000Z`);
 }
 
 function checkOnlyKeys(errs, where, o, allowed) {
@@ -164,7 +176,7 @@ export function validateDocument(doc) {
 
 // Canonical field order and only known fields, so stored and exported items compare equal.
 function normalize(it) {
-  const out = { id: it.id, kind: it.kind, title: it.title, body: it.body, created: it.created, updated: it.updated, tags: [...it.tags] };
+  const out = { id: it.id, kind: it.kind, title: it.title, body: it.body, created: isoDate(it.created), updated: isoDate(it.updated), tags: [...it.tags] };
   if (it.anchor) out.anchor = clone(it.anchor);
   if (it.status !== undefined) out.status = it.status;
   return out;
@@ -180,37 +192,72 @@ class ValidationError extends Error {
   constructor(errors) { super(errors.join('; ')); this.name = 'ValidationError'; this.errors = errors; }
 }
 
+
+// Parses stored or imported text. Returns { items, errors }.
+function parseDocument(text) {
+  let doc;
+  try { doc = JSON.parse(text); } catch { return { items: [], errors: ['Saved workshop data is not valid JSON.'] }; }
+  return validateDocument(doc);
+}
+
+const summarize = errors => `${errors.slice(0, 3).join('; ')}${errors.length > 3 ? '; …' : ''}`;
+const sameItem = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+// Several tabs may share one storage key. Every save re-reads storage first: if another tab wrote since this store
+// last read or wrote, the two lists are merged (newer `updated` wins; deletes on either side are respected) before
+// saving, so neither tab's work is lost. reload() adopts another tab's writes (call it on the window "storage" event).
+// If stored data cannot be read and cannot be backed up either, the store goes read-only rather than overwrite the
+// only copy: getProblem().readOnly is true, getUnreadableText() returns the original, discardUnreadable() lifts it.
 export function createStore({ storage = null, key = 'kiros.workshop.v1', now = () => new Date().toISOString(), idgen = defaultId } = {}) {
   let items = [];
   let problem = null;
+  let readOnly = false;
+  let unreadable = null;     // original text kept in memory when it could be neither loaded nor backed up
+  let lastRaw = null;        // the storage text this store last read or wrote
+  let base = [];             // the items that text held: the common ancestor for merging with other tabs
+  const deleted = new Map(); // id -> time (ms) this store deleted it, so a stale copy elsewhere cannot bring it back
   const subs = new Set();
 
   // ---- load (never throws) ----
   let raw = null;
-  try { raw = storage ? storage.getItem(key) : null; } catch (e) { problem = { message: `Browser storage could not be read (${e.message}). Working in memory only.`, backupKey: null }; }
+  if (storage) {
+    try { raw = storage.getItem(key); } catch (e) {
+      // What is stored could not be seen, so it must never be written over: work in memory only.
+      storage = null;
+      problem = { message: `Browser storage could not be read (${e.message}). Working in memory only: nothing is saved, so export to keep your work.`, backupKey: null };
+    }
+  }
   if (raw !== null && raw !== undefined) {
-    let doc, errors;
-    try { doc = JSON.parse(raw); } catch { errors = ['Saved workshop data is not valid JSON.']; }
-    if (!errors) ({ items, errors } = validateDocument(doc));
-    if (errors.length) {
-      items = [];
+    lastRaw = raw;
+    const { items: loaded, errors } = parseDocument(raw);
+    if (!errors.length) {
+      items = loaded; base = loaded;
+    } else {
       const backupKey = quarantine(raw);
-      problem = {
-        message: `Saved workshop data could not be loaded (${errors.slice(0, 3).join('; ')}${errors.length > 3 ? '; …' : ''}). ` +
-          (backupKey ? `The original text was kept in browser storage under "${backupKey}". Starting with an empty notebook.` : 'It could not be backed up.'),
-        backupKey, errors
-      };
+      if (backupKey) {
+        problem = {
+          message: `Saved workshop data could not be loaded (${summarize(errors)}). The original text was kept in browser storage under "${backupKey}". Starting with an empty notebook.`,
+          backupKey, errors
+        };
+      } else {
+        readOnly = true; unreadable = raw;
+        problem = {
+          message: `Saved workshop data could not be loaded (${summarize(errors)}), and it could not be backed up (browser storage may be full). ` +
+            'The notebook is read-only so that the only copy is not overwritten. Download the unreadable data first; then you can start a fresh notebook.',
+          backupKey: null, readOnly: true, errors
+        };
+      }
     }
   }
 
   function quarantine(text) {
-    const base = `${key}.corrupt`;
+    const qbase = `${key}.corrupt`;
     try {
-      let k = base, n = 1;
+      let k = qbase, n = 1;
       while (true) {
         const existing = storage.getItem(k);
         if (existing === null || existing === undefined || existing === text) break;
-        k = `${base}.${++n}`;
+        k = `${qbase}.${++n}`;
       }
       storage.setItem(k, text);
       return k;
@@ -218,16 +265,87 @@ export function createStore({ storage = null, key = 'kiros.workshop.v1', now = (
   }
 
   const docOf = list => ({ schema: SCHEMA, version: VERSION, items: list });
+  const readOnlyMessage = () => 'The workshop is read-only: saved data could not be loaded or backed up, so nothing is saved until it is downloaded and discarded.';
 
-  // Persist a candidate list; on failure keep the old one and throw.
-  function commit(next) {
-    if (storage) {
-      try { storage.setItem(key, JSON.stringify(docOf(next))); }
-      catch (e) { throw new Error(`Could not save the workshop (${e.message}). The change was not kept.`); }
-    }
-    items = next;
+  function notify() {
     const snapshot = list();
     for (const fn of subs) { try { fn(snapshot); } catch { /* a broken subscriber must not break saving */ } }
+  }
+
+  // Three-way merge of this store's candidate list with what another tab saved, using `base` as the common ancestor.
+  function mergeWithStored(ours, theirs) {
+    const baseById = new Map(base.map(i => [i.id, i]));
+    const theirsById = new Map(theirs.map(i => [i.id, i]));
+    const ourIds = new Set(ours.map(i => i.id));
+    const out = [];
+    for (const o of ours) {
+      const t = theirsById.get(o.id);
+      if (t) { out.push(timeOf(t.updated) > timeOf(o.updated) ? t : o); continue; }
+      const b = baseById.get(o.id);
+      if (b && sameItem(b, o)) continue; // deleted in another tab and not changed here since
+      out.push(o);
+    }
+    for (const t of theirs) {
+      if (ourIds.has(t.id)) continue;
+      const gone = deleted.get(t.id);
+      if (gone !== undefined && !(timeOf(t.updated) > gone)) continue; // deleted here; that copy is no newer than the delete
+      out.push(t);
+    }
+    return out;
+  }
+
+  function storedText() {
+    try { return storage.getItem(key); } catch (e) { throw new Error(`Could not save the workshop (${e.message}). The change was not kept.`); }
+  }
+  const changedElsewhere = cur => cur !== null && cur !== undefined && cur !== lastRaw;
+
+  // Persist a candidate list; on failure keep the old one and throw.
+  function commit(next, { sync = true } = {}) {
+    if (readOnly) throw new Error(readOnlyMessage());
+    if (storage) {
+      const cur = storedText();
+      if (sync && changedElsewhere(cur)) {
+        const theirs = parseDocument(cur);
+        if (theirs.errors.length) {
+          // Something wrote data this page cannot read: keep a copy before saving over it.
+          const backupKey = quarantine(cur);
+          if (!backupKey) throw new Error('Could not save the workshop: the saved data was changed elsewhere into a form this page cannot read, and it could not be backed up. The change was not kept.');
+          problem = { message: `Saved workshop data was changed elsewhere and could not be read (${summarize(theirs.errors)}). It was kept under "${backupKey}".`, backupKey, errors: theirs.errors };
+        } else {
+          next = mergeWithStored(next, theirs.items);
+        }
+        if (next.length > LIMITS.items) throw new Error(`Could not save the workshop: together with changes from another tab it would exceed ${LIMITS.items} items. The change was not kept.`);
+      }
+      const text = JSON.stringify(docOf(next));
+      try { storage.setItem(key, text); }
+      catch (e) { throw new Error(`Could not save the workshop (${e.message}). The change was not kept.`); }
+      lastRaw = text; base = next;
+    }
+    items = next;
+    for (const it of next) deleted.delete(it.id);
+    notify();
+  }
+
+  // Adopt what another tab saved. Returns true when the stored data had changed and was taken in.
+  function reload() {
+    if (!storage) return false;
+    let cur;
+    try { cur = storage.getItem(key); } catch { return false; }
+    if (!changedElsewhere(cur)) return false; // unchanged, or cleared elsewhere: the next save writes this list back
+    const theirs = parseDocument(cur);
+    if (theirs.errors.length) return false;   // the next save backs it up before writing
+    if (readOnly) { items = theirs.items; readOnly = false; unreadable = null; problem = null; }
+    else items = mergeWithStored(items, theirs.items);
+    lastRaw = cur; base = theirs.items;
+    notify();
+    return true;
+  }
+
+  function discardUnreadable() {
+    if (!readOnly) return false;
+    readOnly = false; unreadable = null; problem = null;
+    notify();
+    return true;
   }
 
   function list(filter = {}) {
@@ -247,6 +365,7 @@ export function createStore({ storage = null, key = 'kiros.workshop.v1', now = (
   function get(id) { const it = items.find(i => i.id === id); return it ? clone(it) : null; }
 
   function add(input) {
+    if (readOnly) throw new Error(readOnlyMessage());
     if (!isObj(input)) throw new ValidationError(['item: must be an object']);
     const bad = findForbiddenKey(input);
     if (bad) throw new ValidationError([`item: forbidden key "${bad}"`]);
@@ -266,6 +385,7 @@ export function createStore({ storage = null, key = 'kiros.workshop.v1', now = (
   }
 
   function update(id, patch) {
+    if (readOnly) throw new Error(readOnlyMessage());
     const cur = items.find(i => i.id === id);
     if (!cur) throw new Error(`No workshop item with id "${id}"`);
     if (!isObj(patch)) throw new ValidationError(['patch: must be an object']);
@@ -276,7 +396,7 @@ export function createStore({ storage = null, key = 'kiros.workshop.v1', now = (
     if (own(patch, 'kind') && patch.kind !== cur.kind) throw new ValidationError([`patch.kind: a ${cur.kind} cannot become a ${patch.kind}; make a new item instead`]);
     const next = { ...clone(cur), ...clone(patch), id: cur.id, created: cur.created, updated: now() };
     if (next.anchor === null) delete next.anchor;
-    if (next.updated <= cur.updated) next.updated = new Date(Date.parse(cur.updated) + 1).toISOString();
+    if (timeOf(next.updated) <= timeOf(cur.updated)) next.updated = new Date(timeOf(cur.updated) + 1).toISOString();
     const errs = validateItem(next);
     if (errs.length) throw new ValidationError(errs);
     const n = normalize(next);
@@ -285,8 +405,13 @@ export function createStore({ storage = null, key = 'kiros.workshop.v1', now = (
   }
 
   function remove(id) {
+    if (readOnly) throw new Error(readOnlyMessage());
     if (!items.some(i => i.id === id)) return false;
-    commit(items.filter(i => i.id !== id));
+    const prev = deleted.get(id);
+    const at = timeOf(now());
+    deleted.set(id, Number.isFinite(at) ? at : Date.now());
+    try { commit(items.filter(i => i.id !== id)); }
+    catch (e) { if (prev === undefined) deleted.delete(id); else deleted.set(id, prev); throw e; }
     return true;
   }
 
@@ -294,34 +419,61 @@ export function createStore({ storage = null, key = 'kiros.workshop.v1', now = (
     return JSON.stringify({ schema: SCHEMA, version: VERSION, exported: now(), items: list() }, null, 2);
   }
 
+  // merge: new ids are added; for an id already here the copy with the newer `updated` is kept (the other is counted
+  // as skipped), and an item can never change kind. replace: the file becomes the notebook.
   function importJSON(text, { mode = 'merge' } = {}) {
-    const fail = errors => ({ ok: false, added: 0, updated: 0, errors });
+    const fail = errors => ({ ok: false, added: 0, updated: 0, skipped: 0, errors });
     if (mode !== 'merge' && mode !== 'replace') return fail([`Unknown import mode "${mode}" (use merge or replace).`]);
+    if (readOnly) return fail([readOnlyMessage()]);
     if (typeof text !== 'string') return fail(['The import must be text.']);
     if (text.length > LIMITS.importChars) return fail([`The file is too large (${text.length} characters, limit ${LIMITS.importChars}).`]);
     let doc;
     try { doc = JSON.parse(text); } catch (e) { return fail([`Not valid JSON: ${e.message}`]); }
     const { items: incoming, errors } = validateDocument(doc);
-    if (errors.length) return fail(errors.length > 30 ? [...errors.slice(0, 30), `…and ${errors.length - 30} more problems`] : errors);
+    const capped = list => (list.length > 30 ? [...list.slice(0, 30), `…and ${list.length - 30} more problems`] : list);
+    if (errors.length) return fail(capped(errors));
 
-    let next, added = 0, updated = 0;
+    let next, added = 0, updated = 0, skipped = 0, sync = true;
     if (mode === 'replace') {
-      next = incoming; added = incoming.length;
+      // Replacing is confirmed against what this tab shows; never let it silently wipe another tab's newer work.
+      if (storage) {
+        let cur;
+        try { cur = storedText(); } catch (e) { return fail([e.message]); }
+        if (changedElsewhere(cur)) {
+          reload();
+          return fail(['Your notebook was changed in another tab since this one last loaded it. It has been reloaded here; check it, then import again.']);
+        }
+      }
+      next = incoming; added = incoming.length; sync = false;
     } else {
       const byId = new Map(items.map(i => [i.id, i]));
-      for (const it of incoming) {
-        if (byId.has(it.id)) { if (JSON.stringify(byId.get(it.id)) !== JSON.stringify(it)) updated++; }
-        else added++;
-        byId.set(it.id, it);
-      }
+      const kindErrors = [];
+      incoming.forEach((it, i) => {
+        const cur = byId.get(it.id);
+        if (!cur) { added++; byId.set(it.id, it); return; }
+        if (cur.kind !== it.kind) {
+          kindErrors.push(`items[${i}] (id "${it.id.slice(0, 40)}"): your notebook has this as a ${cur.kind} and the file has it as a ${it.kind}; a ${cur.kind} cannot become a ${it.kind}.`);
+          return;
+        }
+        if (sameItem(cur, it)) return;
+        if (timeOf(it.updated) > timeOf(cur.updated)) { updated++; byId.set(it.id, it); }
+        else skipped++; // your copy is as new or newer: keep it
+      });
+      if (kindErrors.length) return fail(capped(kindErrors));
       next = [...byId.values()];
       if (next.length > LIMITS.items) return fail([`Merging would exceed ${LIMITS.items} items.`]);
     }
-    try { commit(next); } catch (e) { return fail([e.message]); }
-    return { ok: true, added, updated, errors: [] };
+    try { commit(next, { sync }); } catch (e) { return fail([e.message]); }
+    return { ok: true, added, updated, skipped, errors: [] };
   }
 
   function subscribe(fn) { subs.add(fn); return () => subs.delete(fn); }
 
-  return { list, get, add, update, remove, exportJSON, importJSON, subscribe, getProblem: () => (problem ? clone(problem) : null), key };
+  return {
+    list, get, add, update, remove, exportJSON, importJSON, subscribe, reload, discardUnreadable,
+    getProblem: () => (problem ? clone(problem) : null),
+    getUnreadableText: () => unreadable,
+    isReadOnly: () => readOnly,
+    key
+  };
 }

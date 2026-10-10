@@ -142,13 +142,14 @@ test('export then import into a fresh store reproduces identical items', () => {
 
   const b = make();
   const r = b.importJSON(text, { mode: 'replace' });
-  assert.deepEqual(r, { ok: true, added: 4, updated: 0, errors: [] });
+  assert.deepEqual(r, { ok: true, added: 4, updated: 0, skipped: 0, errors: [] });
   const byId = list => Object.fromEntries(list.map(i => [i.id, i]));
   assert.deepEqual(byId(b.list()), byId(a.list()));
 });
 
-test('merge keeps existing items, adds new ones and overwrites same-id items; replace discards the rest', () => {
-  const src = make(memoryStorage(), { idgen: () => 'shared' });
+test('merge keeps existing items, adds new ones and takes a same-id item from the file when the file copy is newer; replace discards the rest', () => {
+  // The file was written an hour after the target's items, so its copy of "shared" is the newer edit.
+  const src = make(memoryStorage(), { idgen: () => 'shared', now: clock(Date.parse('2026-10-10T09:00:00Z')) });
   src.add({ kind: 'note', title: 'from file', body: 'imported' });
   const file = JSON.parse(src.exportJSON());
   file.items.push({ ...file.items[0], id: 'brand-new', title: 'another' });
@@ -162,6 +163,7 @@ test('merge keeps existing items, adds new ones and overwrites same-id items; re
   assert.equal(merged.ok, true);
   assert.equal(merged.added, 1);
   assert.equal(merged.updated, 1);
+  assert.equal(merged.skipped, 0);
   assert.equal(target.get('shared').title, 'from file');
   assert.equal(target.get('local').title, 'mine only');
   assert.equal(target.list().length, 3);
@@ -273,4 +275,150 @@ test('works without any storage (e.g. localStorage blocked): in-memory only', ()
   const s = createStore({ storage: null, now: clock(), idgen: counter() });
   s.add({ kind: 'note', title: 'temp' });
   assert.equal(s.list().length, 1);
+});
+
+// ---------- regression tests for data-loss bugs ----------
+
+const docText = items => JSON.stringify({ schema: SCHEMA, version: VERSION, items });
+const rawItem = (over = {}) => ({ id: 'x', kind: 'note', title: 'x', body: '', created: '2026-10-10T08:00:00.000Z', updated: '2026-10-10T08:00:00.000Z', tags: [], ...over });
+
+test('merge import never reverts a newer local edit: the older file copy is skipped and counted', () => {
+  const storage = memoryStorage();
+  const s = make(storage, { idgen: () => 'n1' });
+  s.add({ kind: 'note', title: 'draft', body: 'v1' });
+  const backup = s.exportJSON();          // the file holds v1
+  s.update('n1', { body: 'v2, written after the backup' });
+  const r = s.importJSON(backup, { mode: 'merge' });
+  assert.equal(r.ok, true, r.errors.join('; '));
+  assert.equal(r.updated, 0);
+  assert.equal(r.skipped, 1);
+  assert.equal(s.get('n1').body, 'v2, written after the backup');
+  assert.equal(make(storage).get('n1').body, 'v2, written after the backup');
+});
+
+test('merge import refuses to change an item\'s kind and names the item; nothing is changed', () => {
+  const storage = memoryStorage();
+  const s = make(storage, { idgen: () => 'p1' });
+  s.add({ kind: 'proposal', title: 'Shrink Lake Veir' });
+  const before = storage.getItem(KEY);
+  const file = docText([rawItem({ id: 'p1', kind: 'idea', title: 'relabelled', updated: '2030-01-01T00:00:00.000Z' })]);
+  const r = s.importJSON(file, { mode: 'merge' });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some(e => e.includes('p1') && /proposal/.test(e) && /idea/.test(e)), r.errors.join('; '));
+  assert.equal(s.get('p1').kind, 'proposal');
+  assert.equal(storage.getItem(KEY), before);
+});
+
+test('dates must be ISO 8601 UTC like the store writes; other Date.parse-able text is rejected', () => {
+  const s = make();
+  for (const bad of ['Sat, 01 Jan 2050 00:00:00 GMT', '2026-10-10', '2026-10-10 08:00:00Z', '2026-02-30T00:00:00.000Z', '2026-10-10T08:00:00+02:00x', 'January 5, 2026']) {
+    const r = s.importJSON(docText([rawItem({ updated: bad })]));
+    assert.equal(r.ok, false, `"${bad}" should be rejected`);
+    assert.ok(r.errors.some(e => e.includes('updated')), r.errors.join('; '));
+  }
+  assert.throws(() => make(memoryStorage(), { now: () => 'Sat, 01 Jan 2050 00:00:00 GMT' }).add({ kind: 'note', title: 'x' }), /created|updated/);
+  assert.equal(s.list().length, 0);
+});
+
+test('ISO dates without milliseconds are accepted but stored in the canonical form so newest-first sorting holds', () => {
+  const s = make();
+  const r = s.importJSON(docText([
+    rawItem({ id: 'whole', title: 'whole second', updated: '2026-10-10T08:00:00Z' }),
+    rawItem({ id: 'later', title: 'half a second later', updated: '2026-10-10T08:00:00.500Z' })
+  ]));
+  assert.equal(r.ok, true, r.errors.join('; '));
+  assert.equal(s.get('whole').updated, '2026-10-10T08:00:00.000Z');
+  assert.deepEqual(s.list().map(i => i.id), ['later', 'whole']);
+});
+
+test('two tabs (two stores on one storage) do not overwrite each other\'s new items', () => {
+  const storage = memoryStorage();
+  const a = make(storage, { idgen: () => 'from-a' });
+  const b = make(storage, { idgen: () => 'from-b' });
+  a.add({ kind: 'note', title: 'written in tab A' });
+  b.add({ kind: 'note', title: 'written in tab B' });   // B has never seen A's note
+  assert.deepEqual(make(storage).list().map(i => i.id).sort(), ['from-a', 'from-b']);
+  assert.deepEqual(b.list().map(i => i.id).sort(), ['from-a', 'from-b'], 'B now holds the merged list too');
+});
+
+test('an edit made in another tab is not reverted by this tab\'s next save, and its delete is not undone', () => {
+  const storage = memoryStorage({ [KEY]: docText([rawItem({ id: 'keep', body: 'v1' }), rawItem({ id: 'gone', title: 'gone' })]) });
+  const a = make(storage, { idgen: () => 'new-a', now: clock(Date.parse('2026-10-10T10:00:00Z')) });
+  const b = make(storage, { now: clock(Date.parse('2026-10-10T09:00:00Z')) });
+  b.update('keep', { body: 'v2 from tab B' });
+  b.remove('gone');
+  a.add({ kind: 'idea', title: 'tab A, unaware of B' });
+  const after = make(storage);
+  assert.equal(after.get('keep').body, 'v2 from tab B');
+  assert.equal(after.get('gone'), null, 'the delete in tab B must not be undone by tab A');
+  assert.ok(after.get('new-a'));
+});
+
+test('an item deleted here is not resurrected by another writer\'s stale copy, but a later edit of it is kept', () => {
+  const storage = memoryStorage({ [KEY]: docText([rawItem({ id: 'old' }), rawItem({ id: 'edited-later' })]) });
+  const a = make(storage, { idgen: () => 'z', now: clock(Date.parse('2026-10-10T12:00:00Z')) });
+  a.remove('old');
+  a.remove('edited-later');
+  // Another writer (e.g. a tab running an older build) puts back its whole stale list plus its own new item.
+  storage.setItem(KEY, docText([rawItem({ id: 'old' }), rawItem({ id: 'edited-later', body: 'edited after the delete', updated: '2026-10-10T13:00:00.000Z' }), rawItem({ id: 'theirs' })]));
+  a.add({ kind: 'note', title: 'mine' });
+  const ids = make(storage).list().map(i => i.id).sort();
+  assert.deepEqual(ids, ['edited-later', 'theirs', 'z']);
+});
+
+test('reload() picks up another tab\'s writes and notifies subscribers; it is a no-op when nothing changed', () => {
+  const storage = memoryStorage();
+  const a = make(storage, { idgen: () => 'a1' });
+  const b = make(storage, { idgen: () => 'b1' });
+  const seen = [];
+  a.subscribe(items => seen.push(items.map(i => i.id)));
+  assert.equal(a.reload(), false);
+  b.add({ kind: 'note', title: 'from B' });
+  assert.equal(a.reload(), true);
+  assert.deepEqual(a.list().map(i => i.id), ['b1']);
+  assert.deepEqual(seen, [['b1']]);
+});
+
+test('replace import refuses to run over changes made in another tab that this tab has not seen', () => {
+  const storage = memoryStorage();
+  const a = make(storage, { idgen: () => 'a1' });
+  const b = make(storage, { idgen: () => 'b1' });
+  const file = make().exportJSON();
+  b.add({ kind: 'note', title: 'B wrote this after A last looked' });
+  const r = a.importJSON(file, { mode: 'replace' });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some(e => /another tab/i.test(e)), r.errors.join('; '));
+  assert.deepEqual(make(storage).list().map(i => i.id), ['b1']);
+  assert.deepEqual(a.list().map(i => i.id), ['b1'], 'A reloaded so the user sees what would be replaced');
+});
+
+test('if unreadable data cannot be backed up, the store is read-only and never overwrites the only copy', () => {
+  const raw = '{"schema":"kiros-workshop","version":1,"items":[{"id":"x","kind":"spell"}]';
+  const storage = memoryStorage({ [KEY]: raw });
+  storage.failWrites = true;                  // quota full: the backup cannot be written
+  const s = make(storage);
+  storage.failWrites = false;                 // even once space frees up, nothing may clobber the original
+  const p = s.getProblem();
+  assert.equal(p.readOnly, true);
+  assert.equal(p.backupKey, null);
+  assert.match(p.message, /read-only/i);
+  assert.equal(s.getUnreadableText(), raw, 'the UI can offer the raw text for download');
+  assert.throws(() => s.add({ kind: 'note', title: 'would clobber' }), /read-only/i);
+  assert.equal(s.importJSON(make().exportJSON(), { mode: 'replace' }).ok, false);
+  assert.equal(storage.getItem(KEY), raw);
+  assert.deepEqual(s.list(), []);
+  // Only an explicit decision (after downloading) lets the notebook start over.
+  s.discardUnreadable();
+  s.add({ kind: 'note', title: 'fresh start' });
+  assert.deepEqual(make(storage).list().map(i => i.title), ['fresh start']);
+});
+
+test('if storage cannot be read at all, the store works in memory and never writes over what it could not read', () => {
+  let writes = 0;
+  const storage = { getItem() { throw new Error('SecurityError'); }, setItem() { writes++; } };
+  const s = make(storage);
+  assert.match(s.getProblem().message, /memory only/i);
+  s.add({ kind: 'note', title: 'temp' });
+  assert.equal(s.list().length, 1);
+  assert.equal(writes, 0);
 });

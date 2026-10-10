@@ -178,6 +178,11 @@ export function mountWorkshop(host = {}) {
     else if (id === 'brief') renderBrief();
   }
 
+  // Another tab saved the notebook: take its changes in (open edit forms are kept by renderNotebookList).
+  const onStorage = e => { if (e.key === STORAGE_KEY || e.key === null) store.reload(); };
+  addEventListener('storage', onStorage);
+  cleanups.push(() => removeEventListener('storage', onStorage));
+
   store.subscribe(() => {
     if (rendered.notebook) renderNotebookList();
     if (rendered.places && activeTab === 'places') renderPlaces();
@@ -638,6 +643,8 @@ export function mountWorkshop(host = {}) {
           }, { class: 'ws-btn ws-btn--small' }))))));
   }
 
+  // Each place's add-note slot outlives re-renders (any store change re-renders this tab), so a half-written note stays.
+  const placeSlots = new Map();
   function renderPlaces() {
     const pane = panels.places;
     const scroll = pane.scrollTop;
@@ -647,7 +654,8 @@ export function mountWorkshop(host = {}) {
     const list = h('ul', { class: 'ws-places' });
     for (const p of places) {
       const items = store.list({ placeId: p.id });
-      const slot = h('div');
+      let slot = placeSlots.get(p.id);
+      if (!slot) { slot = h('div'); placeSlots.set(p.id, slot); }
       const notesList = h('ul', { class: 'ws-place-notes', hidden: true }, items.map(it => h('li', { class: `ws-mini ws-mini--${it.kind}` },
         h('span', { class: 'ws-kind' }, it.kind === 'proposal' ? `Proposal, not canon (${it.status})` : KIND_LABEL[it.kind]), h('strong', {}, it.title), it.body ? h('p', {}, it.body) : null)));
       const showBtn = items.length ? btn(`${items.length} item${items.length > 1 ? 's' : ''}`, e => { notesList.hidden = !notesList.hidden; e.currentTarget.setAttribute('aria-expanded', String(!notesList.hidden)); }, { class: 'ws-btn ws-btn--small', 'aria-expanded': 'false' }) : h('span', { class: 'ws-hint' }, 'no notes');
@@ -671,17 +679,20 @@ export function mountWorkshop(host = {}) {
 
   // ---------- Notebook tab ----------
   let nbFilter = 'all', nbText = '';
-  let nbList = null, nbForm = null;
+  let nbList = null;
+  // These outlive re-renders of the pane so that unsaved text in the new-item form or an open edit form is never
+  // thrown away by a search keystroke, a save elsewhere, another tab's write or late-loading comparison data.
+  const nbForm = h('div');
+  const nbProblem = h('div');
+  const editors = new Map(); // item id -> { li, baseUpdated, notice } for cards with an open edit form
   function renderNotebook() {
     const pane = panels.notebook;
     pane.textContent = '';
-    const problem = store.getProblem();
     const filterBar = h('div', { class: 'ws-filterbar', role: 'group', 'aria-label': 'Filter by kind' },
       [['all', 'All'], ...KINDS.map(k => [k, `${KIND_LABEL[k]}s`])].map(([k, label]) =>
         btn(label, e => { nbFilter = k; for (const b of filterBar.children) b.setAttribute('aria-pressed', String(b === e.currentTarget)); renderNotebookList(); }, { class: 'ws-chip', 'aria-pressed': String(nbFilter === k) })));
     const search = h('input', { type: 'search', id: 'ws-nb-search', placeholder: 'Search your notebook', value: nbText });
     search.addEventListener('input', () => { nbText = search.value; renderNotebookList(); });
-    nbForm = h('div');
 
     const markBtn = btn('Bookmark this view', () => {
       nbForm.textContent = '';
@@ -727,14 +738,15 @@ export function mountWorkshop(host = {}) {
       const count = store.list().length;
       if (mode === 'replace' && count && !confirm(`Replace all ${count} items in your notebook with the contents of ${f.name}? Export first if you want a backup.`)) return;
       const r = store.importJSON(await f.text(), { mode });
-      if (r.ok) app(importResult, h('p', { class: 'ws-ok' }, `Imported ${f.name}: ${r.added} added, ${r.updated} updated (${mode}).`));
+      if (r.ok) app(importResult, h('p', { class: 'ws-ok' }, `Imported ${f.name}: ${r.added} added, ${r.updated} updated (${mode})` +
+        (r.skipped ? `; ${r.skipped} kept as they are because your copy is as new or newer than the file's.` : '.')));
       else app(importResult, h('p', { class: 'ws-error' }, `Import failed. Nothing was changed. Problems in ${f.name}:`), h('ul', { class: 'ws-errlist' }, r.errors.map(e => h('li', {}, e))));
     });
 
     nbList = h('ul', { class: 'ws-items' });
     app(pane, 
       h('div', { class: 'ws-pane-head' }, h('h3', {}, 'Notebook'), h('p', { class: 'ws-hint' }, `Saved in this browser (${storage ? 'local storage' : 'memory only: storage is blocked, export to keep your work'}). Export a backup now and then.`)),
-      problem ? h('p', { class: 'ws-hint ws-hint--warn', role: 'alert' }, problem.message) : null,
+      nbProblem,
       h('div', { class: 'ws-actions' }, markBtn, newBtn),
       nbForm,
       h('div', { class: 'ws-io' },
@@ -748,16 +760,59 @@ export function mountWorkshop(host = {}) {
     renderNotebookList();
   }
 
-  function renderNotebookList() {
-    if (!nbList) return;
-    const editing = nbList.querySelector('[data-editing]')?.dataset.editing;
-    nbList.textContent = '';
-    const items = store.list({ ...(nbFilter !== 'all' ? { kind: nbFilter } : {}), ...(nbText ? { text: nbText } : {}) });
-    if (!items.length) app(nbList, h('li', { class: 'ws-hint' }, store.list().length ? 'Nothing matches.' : 'Nothing yet. Bookmark a view, or add a note from a source or place.'));
-    for (const it of items) app(nbList, itemCard(it, it.id === editing));
+  function renderProblem() {
+    nbProblem.textContent = '';
+    const problem = store.getProblem();
+    if (!problem) return;
+    app(nbProblem, h('p', { class: 'ws-hint ws-hint--warn', role: 'alert' }, problem.message));
+    if (problem.readOnly) {
+      app(nbProblem, h('div', { class: 'ws-actions' },
+        btn('Download the unreadable data', () => {
+          download(`kiros-workshop-unreadable-${localDate()}.txt`, store.getUnreadableText() || '', 'text/plain');
+          say('Downloaded the unreadable data.');
+        }, { class: 'ws-btn ws-btn--primary' }),
+        btn('Start a fresh notebook…', () => {
+          if (!confirm('Start a fresh notebook? The unreadable data in browser storage will be overwritten by your next save. Download it first if you may need it.')) return;
+          store.discardUnreadable(); say('Started a fresh notebook.');
+        }, { class: 'ws-btn ws-btn--danger' })));
+    }
   }
 
-  function itemCard(it, startEditing = false) {
+  function renderNotebookList() {
+    if (!nbList) return;
+    renderProblem();
+    const all = store.list();
+    const shown = new Set(store.list({ ...(nbFilter !== 'all' ? { kind: nbFilter } : {}), ...(nbText ? { text: nbText } : {}) }).map(i => i.id));
+    // Moving an open form out of and back into the list would drop focus and the caret: put them back afterwards.
+    const active = document.activeElement;
+    const keep = active && nbList.contains(active) ? { el: active, start: active.selectionStart, end: active.selectionEnd, top: active.scrollTop } : null;
+    const paneScroll = panels.notebook.scrollTop;
+    nbList.textContent = '';
+    let count = 0;
+    for (const it of all) {
+      const ed = editors.get(it.id);
+      if (ed) {
+        // Keep the open form as it is (with whatever has been typed), even when the filter would hide the item.
+        ed.notice.textContent = it.updated !== ed.baseUpdated ? 'This item was changed elsewhere (another tab or an import) since you opened it. Saving replaces that version with this text.' : '';
+        app(nbList, ed.li); count++;
+      } else if (shown.has(it.id)) { app(nbList, itemCard(it)); count++; }
+    }
+    // Forms for items deleted elsewhere stay too, so their text can still be saved as a new item.
+    for (const [id, ed] of editors) {
+      if (all.some(i => i.id === id)) continue;
+      ed.notice.textContent = 'This item was deleted elsewhere. Saving keeps your text as a new item.';
+      app(nbList, ed.li); count++;
+    }
+    if (!count) app(nbList, h('li', { class: 'ws-hint' }, all.length ? 'Nothing matches.' : 'Nothing yet. Bookmark a view, or add a note from a source or place.'));
+    panels.notebook.scrollTop = paneScroll;
+    if (keep && nbList.contains(keep.el) && document.activeElement !== keep.el) {
+      keep.el.focus({ preventScroll: true });
+      try { if (typeof keep.start === 'number') keep.el.setSelectionRange(keep.start, keep.end); } catch { /* not a text field */ }
+      keep.el.scrollTop = keep.top;
+    }
+  }
+
+  function itemCard(it) {
     const li = h('li', { class: `ws-item ws-item--${it.kind}` });
     const a = it.anchor;
     const go = a?.type === 'view' ? btn('Go', () => goToView(a.view), { class: 'ws-btn ws-btn--small ws-btn--primary' })
@@ -770,7 +825,8 @@ export function mountWorkshop(host = {}) {
     const view = () => {
       li.textContent = '';
       delete li.dataset.editing;
-      app(li, 
+      if (editors.get(it.id)?.li === li) editors.delete(it.id);
+      app(li,
         h('div', { class: 'ws-item-head' },
           h('span', { class: 'ws-kind' }, it.kind === 'proposal' ? 'Proposal, not canon' : KIND_LABEL[it.kind]),
           STATUSES[it.kind] ? h('span', { class: statusClass(it.status) }, it.kind === 'proposal' && it.status === 'accepted' ? 'accepted in workshop' : it.status) : null,
@@ -790,24 +846,35 @@ export function mountWorkshop(host = {}) {
       const g = h('input', { type: 'text', id: `ws-e-g-${uid}`, value: it.tags.join(', ') });
       const st = STATUSES[it.kind] ? h('select', { id: `ws-e-s-${uid}` }, STATUSES[it.kind].map(s => h('option', { value: s, selected: s === it.status }, s))) : null;
       const err = h('p', { class: 'ws-error', role: 'alert' });
+      const notice = h('p', { class: 'ws-hint ws-hint--warn', 'aria-live': 'polite' });
       const f = h('form', { class: 'ws-form' },
         h('label', { for: t.id }, `${KIND_LABEL[it.kind]} title`), t,
         h('label', { for: b.id }, 'Body'), b,
         h('label', { for: g.id }, 'Tags'), g,
         st ? [h('label', { for: st.id }, it.kind === 'proposal' ? 'Status (accepted = accepted by you in the workshop; sources are not edited)' : 'Status'), st] : null,
-        err,
-        h('div', { class: 'ws-actions' }, h('button', { type: 'submit', class: 'ws-btn ws-btn--primary' }, 'Save'), btn('Cancel', view)));
+        notice, err,
+        h('div', { class: 'ws-actions' }, h('button', { type: 'submit', class: 'ws-btn ws-btn--primary' }, 'Save'), btn('Cancel', () => { editors.delete(it.id); renderNotebookList(); })));
       f.addEventListener('submit', e => {
         e.preventDefault();
+        err.textContent = '';
+        const fields = { title: t.value.trim() || it.title, body: b.value, tags: g.value.split(',').map(s => s.trim()).filter(Boolean), ...(st ? { status: st.value } : {}) };
+        // Close the form first so the re-render after saving shows the saved card; reopen it if saving fails.
+        editors.delete(it.id);
         try {
-          store.update(it.id, { title: t.value.trim() || it.title, body: b.value, tags: g.value.split(',').map(s => s.trim()).filter(Boolean), ...(st ? { status: st.value } : {}) });
+          if (store.get(it.id)) store.update(it.id, fields);
+          else store.add({ kind: it.kind, ...fields, ...(it.anchor ? { anchor: it.anchor } : {}) }); // deleted elsewhere meanwhile
           say('Saved.');
-        } catch (ex) { err.textContent = ex.errors ? ex.errors.join(' · ') : ex.message; }
+        } catch (ex) {
+          editors.set(it.id, entry);
+          err.textContent = ex.errors ? ex.errors.join(' · ') : ex.message;
+        }
       });
+      const entry = { li, baseUpdated: it.updated, notice };
+      editors.set(it.id, entry);
       app(li, f);
       setTimeout(() => t.focus(), 0);
     };
-    if (startEditing) edit(); else view();
+    view();
     return li;
   }
 
@@ -846,7 +913,7 @@ export function mountWorkshop(host = {}) {
   if (problem) console.warn('[workshop]', problem.message);
 
   return {
-    open: tab => { if (tab && panels[tab]) activeTab = tab; setOpen(true); },
+    open: tab => { if (tab && panels[tab]) activeTab = tab; if (open) selectTab(activeTab, { focus: true }); else setOpen(true); },
     close: () => setOpen(false),
     toggle: () => setOpen(!open),
     isOpen: () => open,
