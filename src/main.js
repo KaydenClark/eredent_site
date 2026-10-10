@@ -324,6 +324,7 @@ function frame(forcedDt) {
   terrain.update(camera, settings.relief);
   vegetation.uniforms.uDay.value = dayK;
   vegetation.update(dt, camera, rig.latLon, alt);
+  terrain.material.uniforms.uFloorDist.value = vegetation.group.visible ? vegetation._radius('trees') * 0.92 : 0;
   for (const fn of hooks.frame) fn(dt, { alt, ground, asl, dayK, sunUp });
   {
     const ll = rig.latLon;

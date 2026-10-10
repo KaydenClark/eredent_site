@@ -13,6 +13,7 @@ import { GLSL_FOG } from './shaders.js';
 // the spec's descriptions until Kayden names real flora.
 
 const D2R = Math.PI / 180;
+const SEG = { ico: 1, cone: 8, cyl: 7 };   // geometry detail; lowered while building the far versions
 
 // --- geometry: unit-height shapes with vertex colors (y up, base at 0) ------------------------------------
 function colored(g, c, shade = null) {
@@ -40,20 +41,20 @@ const lumpy = (g, amt, seed) => {   // break up perfect primitives (welded first
 const aoY = (lo, hi) => (x, y) => 0.55 + 0.45 * Math.min(1, Math.max(0, (y - lo) / (hi - lo)));
 
 function conifer({ trunk = 0x4a3426, leaf = 0x24402a, tiers = 6, width = 0.16, bare = 0.3, trunkW = 0.035 }) {
-  const parts = [colored(at(new THREE.CylinderGeometry(trunkW * 0.55, trunkW, 1, 7, 1, true), 0, 0.5, 0), trunk, aoY(0, 0.6))];
+  const parts = [colored(at(new THREE.CylinderGeometry(trunkW * 0.55, trunkW, 1, SEG.cyl, 1, true), 0, 0.5, 0), trunk, aoY(0, 0.6))];
   for (let i = 0; i < tiers; i++) {
     const t = i / tiers, y0 = bare + (1 - bare) * t * 0.92, hgt = (1 - bare) / tiers * 1.9;
     const r = width * (1 - t * 0.8);
-    parts.push(colored(lumpy(at(new THREE.ConeGeometry(r, hgt, 8, 1, true), 0, y0 + hgt / 2, 0), 0.25, i), leaf, aoY(y0 - 0.1, y0 + hgt * 1.2)));
+    parts.push(colored(lumpy(at(new THREE.ConeGeometry(r, hgt, SEG.cone, 1, true), 0, y0 + hgt / 2, 0), 0.25, i), leaf, aoY(y0 - 0.1, y0 + hgt * 1.2)));
   }
   return mergeGeometries(parts);
 }
 function broadleaf({ trunk = 0x5a4632, leaf = 0x3d5a26, crown = 0.62, spread = 0.26, blobs = 5, trunkW = 0.03, flat = 1 }) {
-  const parts = [colored(at(new THREE.CylinderGeometry(trunkW * 0.6, trunkW, crown + 0.08, 7, 1, true), 0, (crown + 0.08) / 2, 0), trunk, aoY(0, crown))];
+  const parts = [colored(at(new THREE.CylinderGeometry(trunkW * 0.6, trunkW, crown + 0.08, SEG.cyl, 1, true), 0, (crown + 0.08) / 2, 0), trunk, aoY(0, crown))];
   for (let i = 0; i < blobs; i++) {
     const a = i / blobs * Math.PI * 2 + 0.4, r = i === 0 ? 0 : spread * 0.55;
     const s = spread * (i === 0 ? 0.85 : 0.6);
-    const g = new THREE.IcosahedronGeometry(1, 1); g.scale(s, s * 0.7 * flat, s);
+    const g = new THREE.IcosahedronGeometry(1, SEG.ico); g.scale(s, s * 0.7 * flat, s);
     const y = crown + (1 - crown) * (i === 0 ? 0.55 : 0.3);
     parts.push(colored(lumpy(at(g, Math.cos(a) * r, y, Math.sin(a) * r), 0.35, i * 7), leaf, aoY(crown - 0.05, 1)));
   }
@@ -61,12 +62,12 @@ function broadleaf({ trunk = 0x5a4632, leaf = 0x3d5a26, crown = 0.62, spread = 0
 }
 function emergent() {   // giant tropical emergent: tall bare trunk, buttress, wide flat crown
   const parts = [
-    colored(at(new THREE.CylinderGeometry(0.018, 0.03, 0.8, 7, 1, true), 0, 0.4, 0), 0x6b5a48, aoY(0, 0.7)),
+    colored(at(new THREE.CylinderGeometry(0.018, 0.03, 0.8, SEG.cyl, 1, true), 0, 0.4, 0), 0x6b5a48, aoY(0, 0.7)),
     colored(at(new THREE.ConeGeometry(0.075, 0.12, 7, 1, true), 0, 0.06, 0), 0x5e4e3c, aoY(0, 0.12))
   ];
   for (let i = 0; i < 6; i++) {
     const a = i / 6 * Math.PI * 2, r = i === 0 ? 0 : 0.17;
-    const g = new THREE.IcosahedronGeometry(1, 1); g.scale(0.17, 0.07, 0.17);
+    const g = new THREE.IcosahedronGeometry(1, SEG.ico); g.scale(0.17, 0.07, 0.17);
     parts.push(colored(lumpy(at(g, Math.cos(a) * r, 0.86 + (i % 2) * 0.04, Math.sin(a) * r), 0.3, i), 0x2f5a1e, aoY(0.78, 0.95)));
   }
   return mergeGeometries(parts);
@@ -74,10 +75,10 @@ function emergent() {   // giant tropical emergent: tall bare trunk, buttress, w
 function cypress() {    // swamp tree: flared base, narrow trunk, flat irregular tiers with hanging moss
   const parts = [
     colored(at(new THREE.CylinderGeometry(0.02, 0.07, 0.25, 8, 1, true), 0, 0.125, 0), 0x4c4434, aoY(0, 0.25)),
-    colored(at(new THREE.CylinderGeometry(0.015, 0.022, 0.7, 7, 1, true), 0, 0.6, 0), 0x524634, aoY(0.2, 0.9))
+    colored(at(new THREE.CylinderGeometry(0.015, 0.022, 0.7, SEG.cyl, 1, true), 0, 0.6, 0), 0x524634, aoY(0.2, 0.9))
   ];
   for (let i = 0; i < 4; i++) {
-    const g = new THREE.IcosahedronGeometry(1, 1); const s = 0.22 - i * 0.03; g.scale(s, s * 0.32, s);
+    const g = new THREE.IcosahedronGeometry(1, SEG.ico); const s = 0.22 - i * 0.03; g.scale(s, s * 0.32, s);
     const a = i * 2.1;
     parts.push(colored(lumpy(at(g, Math.cos(a) * 0.06, 0.62 + i * 0.1, Math.sin(a) * 0.06), 0.4, i * 3), 0x3a4a26, aoY(0.55, 1)));
     const m = new THREE.ConeGeometry(s * 0.7, 0.16, 7, 1, true); m.rotateX(Math.PI);
@@ -85,8 +86,8 @@ function cypress() {    // swamp tree: flared base, narrow trunk, flat irregular
   }
   return mergeGeometries(parts);
 }
-function shrub(color) { const g = new THREE.IcosahedronGeometry(0.5, 1); g.scale(1, 0.75, 1); return colored(lumpy(at(g, 0, 0.32, 0), 0.45, 3), color, aoY(0, 0.8)); }
-function rock() { const g = new THREE.IcosahedronGeometry(0.5, 1); g.scale(1, 0.6, 0.8); return colored(lumpy(at(g, 0, 0.15, 0), 0.6, 11), 0x77736c, aoY(-0.1, 0.6)); }
+function shrub(color) { const g = new THREE.IcosahedronGeometry(0.5, SEG.ico); g.scale(1, 0.75, 1); return colored(lumpy(at(g, 0, 0.32, 0), 0.45, 3), color, aoY(0, 0.8)); }
+function rock() { const g = new THREE.IcosahedronGeometry(0.5, SEG.ico); g.scale(1, 0.6, 0.8); return colored(lumpy(at(g, 0, 0.15, 0), 0.6, 11), 0x77736c, aoY(-0.1, 0.6)); }
 function tuft(color, blades = 7, lean = 0.35) {     // crossed blades: grass, sedge, fern fronds
   const parts = [];
   for (let i = 0; i < blades; i++) {
@@ -144,7 +145,7 @@ const ZONES = {
 };
 
 const LAYERS = {
-  trees: { cell: 48, per: 3, radius: 2600, chunk: 8, density: { tropical: 1, mixed: 0.9, taiga: 0.95, wetland: 0.45, bayou: 0.55 } },
+  trees: { cell: 40, per: 3, radius: 2600, chunk: 8, density: { tropical: 1, mixed: 0.9, taiga: 0.95, wetland: 0.45, bayou: 0.55 } },
   under: { cell: 24, per: 2, radius: 700, chunk: 8, density: { snow: 0.1, alpine: 0.55, tundra: 0.45, desert: 0.35 } },
   ground: { cell: 4, per: 1, radius: 95, chunk: 8 }
 };
@@ -217,23 +218,30 @@ export class Vegetation {
     this.material = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: this.uniforms, side: THREE.DoubleSide });
     this.meshes = {};                 // `${layer}:${species}` -> InstancedMesh, made when first needed
     this.geos = {};
-    this.caps = { trees: 16000, under: 9000, ground: 7000 };
+    this.caps = { trees: 30000, under: 9000, ground: 7000 };
+    this.reach = 1;                   // tree ring grows with height above ground (set each frame)
     this.lastBuild = {};
     this.stats = { instances: 0, chunks: 0 };
   }
 
   clear() { this.chunks.clear(); this.queue = []; this.dirty = true; this.lastBuild = {}; for (const m of Object.values(this.meshes)) m.count = 0; }
 
-  _mesh(layer, name) {
-    const key = `${layer}:${name}`;
+  _mesh(layer, name, far = false) {
+    const key = `${layer}:${name}${far ? ':far' : ''}`;
     let m = this.meshes[key];
     if (!m) {
-      const geo = this.geos[name] || (this.geos[name] = SPECIES[name].geo());
+      const gk = name + (far ? ':far' : '');
+      if (!this.geos[gk]) {
+        if (far) Object.assign(SEG, { ico: 0, cone: 5, cyl: 4 });
+        this.geos[gk] = SPECIES[name].geo();
+        Object.assign(SEG, { ico: 1, cone: 8, cyl: 7 });
+      }
+      const geo = this.geos[gk];
       const cap = this.caps[layer];
       m = new THREE.InstancedMesh(geo, this.material, cap);
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3).setUsage(THREE.DynamicDrawUsage);
-      m.count = 0; m.frustumCulled = false; m.userData = { cap, layer };
+      m.count = 0; m.frustumCulled = false; m.userData = { cap, layer, key };
       this.meshes[key] = m; this.group.add(m);
     }
     return m;
@@ -307,7 +315,14 @@ export class Vegetation {
     return keys;
   }
 
+  _radius(layer) {
+    const q = this.quality;
+    return LAYERS[layer].radius * (layer === 'trees' ? q * this.reach : Math.min(q, 1.2));
+  }
+
   update(dt, camera, latLon, agl, frameBudgetMs = 5) {
+    const reach = Math.min(2, 1 + Math.max(0, agl - 20) / 1200);
+    if (Math.abs(reach - this.reach) > 0.15) { this.reach = reach; this.lastBuild.trees = null; }
     this.uniforms.uTime.value += dt;
     this.uniforms.uUp.value.copy(camera.position).normalize();
     const show = this.enabled && agl < 3500;
@@ -315,7 +330,7 @@ export class Vegetation {
     if (!show) return;
     const q = this.quality;
     const want = [];
-    for (const layer of Object.keys(LAYERS)) want.push(...this._chunkKeys(layer, latLon.lat, latLon.lon, LAYERS[layer].radius * (layer === 'trees' ? q : Math.min(q, 1.2))));
+    for (const layer of Object.keys(LAYERS)) want.push(...this._chunkKeys(layer, latLon.lat, latLon.lon, this._radius(layer)));
     want.sort((a, b) => a.d - b.d);
     const t0 = performance.now();
     let added = 0; this._addedTo = new Set();
@@ -347,39 +362,42 @@ export class Vegetation {
     const m4 = new THREE.Matrix4(), up = new THREE.Vector3(), east = new THREE.Vector3(), north = new THREE.Vector3();
     const x = new THREE.Vector3(), z = new THREE.Vector3(), col = new THREE.Color();
     const camR = camera.position;
-    const lim = LAYERS[layer].radius * (layer === 'trees' ? this.quality : Math.min(this.quality, 1.2));
+    const lim = this._radius(layer);
     const lim2 = (lim / R) ** 2;
     for (const ch of this.chunks.values()) {
       if (ch.layer !== layer) continue;
       for (const [name, rows] of Object.entries(ch.data)) {
-        const mesh = this._mesh(layer, name);
-        if (mesh.parent !== grp) grp.add(mesh);
-        const cap = mesh.userData.cap; let c = counts[name] || 0;
-        for (let r = 0; r < rows.length && c < cap; r += 7) {
+        const near = this._mesh(layer, name), farM = layer === 'trees' ? this._mesh(layer, name, true) : near;
+        for (const mm of [near, farM]) if (mm.parent !== grp) grp.add(mm);
+        const farD2 = (900 / R) ** 2;
+        for (let r = 0; r < rows.length; r += 7) {
           const lat = rows[r], lon = rows[r + 1], h = rows[r + 2], size = rows[r + 3], yaw = rows[r + 4], tint = rows[r + 5], light = rows[r + 6];
           const p = lat * D2R, l = lon * D2R, cp = Math.cos(p);
           up.set(cp * Math.cos(l), Math.sin(p), -cp * Math.sin(l));
           const sink = name === 'boulder' || name === 'stone' ? 0.3 * size : layer === 'trees' ? 1.5 + size * 0.02 : 0.12;
           const rr = 1 + (h - sink) / R;
           const px = up.x * rr - camR.x, py = up.y * rr - camR.y, pz = up.z * rr - camR.z;
-          if (px * px + py * py + pz * pz > lim2) continue;
+          const d2 = px * px + py * py + pz * pz;
+          if (d2 > lim2) continue;
+          const edge = layer === 'ground' ? 1 : Math.min(1, (1 - Math.sqrt(d2 / lim2)) / 0.18);   // shrink into the ring's edge, no pop
           east.set(-Math.sin(l), 0, -Math.cos(l)); north.crossVectors(up, east);
           x.copy(east).multiplyScalar(Math.cos(yaw)).addScaledVector(north, Math.sin(yaw));
           z.crossVectors(x, up);
-          const s = size / R, w = s * (0.85 + tint * 0.3);
+          const s = size / R * edge, w = s * (0.85 + tint * 0.3) * (layer === 'trees' ? 1.35 : 1);
           m4.set(x.x * w, up.x * s, z.x * w, px, x.y * w, up.y * s, z.y * w, py, x.z * w, up.z * s, z.z * w, pz, 0, 0, 0, 1);
+          const mesh = d2 > farD2 ? farM : near, key = mesh.userData.key;
+          const c = counts[key] || 0; if (c >= mesh.userData.cap) continue;
           mesh.setMatrixAt(c, m4);
           const k = (0.82 + tint * 0.32) * light;
           col.setRGB(k * (0.95 + tint * 0.1), k, k * (1.05 - tint * 0.1));
           mesh.setColorAt(c, col);
-          c++;
+          counts[key] = c + 1;
         }
-        counts[name] = c;
       }
     }
     for (const [key, mesh] of Object.entries(this.meshes)) {
       if (mesh.userData.layer !== layer) continue;
-      const n = counts[key.split(':')[1]] || 0;
+      const n = counts[key] || 0;
       mesh.count = n;
       mesh.instanceMatrix.clearUpdateRanges(); mesh.instanceMatrix.addUpdateRange(0, n * 16); mesh.instanceMatrix.needsUpdate = true;
       mesh.instanceColor.clearUpdateRanges(); mesh.instanceColor.addUpdateRange(0, n * 3); mesh.instanceColor.needsUpdate = true;

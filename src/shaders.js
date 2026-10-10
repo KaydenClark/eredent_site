@@ -225,7 +225,7 @@ void main() {
       vec3 moss = vec3(0.07, 0.10, 0.04), litter = vec3(0.12, 0.085, 0.05), wet = vec3(0.05, 0.07, 0.045);
       vec3 floorC = mix(mix(moss, litter, smoothstep(0.35, 0.7, m)), wet, abs(biome - 3.0) < 0.5 || abs(biome - 6.0) < 0.5 ? 0.6 : 0.0);
       floorC *= 0.8 + 0.4 * m2;
-      vec3 grassC = mix(vec3(0.09, 0.13, 0.045), vec3(0.15, 0.15, 0.07), m) * (0.8 + 0.4 * m2);
+      vec3 grassC = mix(vec3(0.065, 0.105, 0.035), vec3(0.10, 0.125, 0.05), m) * (0.8 + 0.4 * m2);
       base = mix(base, mix(floorC, grassC, meadow), under);
       // the canopy takes most of the direct sun; a few sun flecks get through
       float fleck = smoothstep(0.62, 0.8, vnoise(vSphere * 2400000.0 * 0.25));
