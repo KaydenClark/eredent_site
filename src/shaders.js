@@ -50,38 +50,11 @@ vec3 applyFog(vec3 col, vec3 toPoint, float pointAltM, float radiusM) {
 }
 `;
 
-export const TERRAIN_VERT = /* glsl */`
-precision highp float; precision highp int;
-attribute vec3 aGridS;         // grid u, v, skirt flag
-attribute vec4 aTile;          // u0, v0, size, depth + 32·face   (instance)
-attribute vec4 aP0, aP1, aP2, aP3; attribute vec2 aP4;   // deep tiles: center (relative to the origin) and Taylor terms, packed
-attribute vec4 aU0, aU1, aU2;  // deep tiles: layer uv at the center and its Taylor terms
-uniform float uRelief, uDetail, uGridN, uDeep, uTime;
-uniform sampler2D uMask;
-uniform vec3 uOrigin;          // unit direction of the local origin; the mesh is placed there
-uniform vec3 uCamLocal;        // camera position relative to the origin
-varying vec3 vNormal, vSphere, vView; varying vec2 vUvW; varying float vIn, vDepth, vAlt, vCoast;
-#include <common>
-#include <logdepthbuf_pars_vertex>
-${GLSL_GEO}
-${GLSL_NOISE}
-${GLSL_LAYERS}
-
-// Direction to a grid point, relative to the origin. Deep (small, near) tiles use a second-order expansion about
-// their center computed on the CPU in double precision, so nothing near the camera is ever the small difference of
-// two numbers near 1. Coarse tiles are far away and use the exact cube-to-sphere mapping.
-float tDepth, tFace;
-vec3 tileRel(vec2 g) {
-  if (tDepth >= uDeep) {
-    vec2 d = (g - 0.5) * aTile.z;
-    vec3 C = aP0.xyz, Ju = vec3(aP0.w, aP1.xy), Jv = vec3(aP1.zw, aP2.x), Huu = aP2.yzw, Huv = aP3.xyz, Hvv = vec3(aP3.w, aP4);
-    return C + Ju * d.x + Jv * d.y + 0.5 * Huu * d.x * d.x + Huv * d.x * d.y + 0.5 * Hvv * d.y * d.y;
-  }
-  vec2 st = aTile.xy + g * aTile.z;
-  return normalize(spherify(cubePoint(tFace, st * 2.0 - 1.0))) - uOrigin;
-}
-
-// fractal relief below the data resolution (same function as detailAt() in heightfield.js)
+// Fractal relief below the data resolution (same function as detailAt() in heightfield.js), and the clearing field.
+// Shared by the terrain and by everything scattered on it on the GPU (forest.js, fauna.js), so they all stand on the
+// same ground.
+export const GLSL_DETAIL = /* glsl */`
+uniform float uRelief, uDetail;
 float detail(vec3 n, float h, float landW, float fade) {
   if (fade <= 0.0 || landW <= 0.0) return 0.0;
   float rugged = smoothstep(700.0, 2600.0, h);
@@ -95,6 +68,51 @@ float detail(vec3 n, float h, float landW, float fade) {
           + (vnoise(n * 128000.0) - 0.5) * 2.5;
   if (d > 0.0) d *= 1.0 - 0.75 * smoothstep(3300.0, 4300.0, h);   // summits stay near the spec heights
   return d * fade * landW * uDetail;
+}
+
+// proposed: natural clearings from fire, windthrow and megafauna grazing. 0 = closed forest, 1 = open ground
+float clearingNoise(vec3 n) { return smoothstep(0.62, 0.72, vnoise(n * 9000.0) * 0.6 + vnoise(n * 54000.0) * 0.4); }
+`;
+
+export const GLSL_MEADOW = /* glsl */`
+// proposed: meadows a few hundred meters across, mainly in the mid latitudes, kept open by fire, windthrow and the
+// big grazers. 0 = closed forest, 1 = open grass. n = unit sphere position, lat in degrees.
+float meadowNoise(vec3 n, float lat) {
+  float w = smoothstep(14.0, 24.0, abs(lat)) * (1.0 - smoothstep(56.0, 64.0, abs(lat)));
+  return smoothstep(0.63, 0.69, vnoise(n * 2600.0 + 7.0) * 0.65 + vnoise(n * 11000.0) * 0.35) * w;
+}
+`;
+
+export const TERRAIN_VERT = /* glsl */`
+precision highp float; precision highp int;
+attribute vec3 aGridS;         // grid u, v, skirt flag
+attribute vec4 aTile;          // u0, v0, size, depth + 32·face   (instance)
+attribute vec4 aP0, aP1, aP2, aP3; attribute vec2 aP4;   // deep tiles: center (relative to the origin) and Taylor terms, packed
+attribute vec4 aU0, aU1, aU2;  // deep tiles: layer uv at the center and its Taylor terms
+uniform float uGridN, uDeep, uTime;
+uniform sampler2D uMask;
+uniform vec3 uOrigin;          // unit direction of the local origin; the mesh is placed there
+uniform vec3 uCamLocal;        // camera position relative to the origin
+varying vec3 vNormal, vSphere, vView; varying vec2 vUvW; varying float vIn, vDepth, vAlt, vCoast;
+#include <common>
+#include <logdepthbuf_pars_vertex>
+${GLSL_GEO}
+${GLSL_NOISE}
+${GLSL_LAYERS}
+${GLSL_DETAIL}
+
+// Direction to a grid point, relative to the origin. Deep (small, near) tiles use a second-order expansion about
+// their center computed on the CPU in double precision, so nothing near the camera is ever the small difference of
+// two numbers near 1. Coarse tiles are far away and use the exact cube-to-sphere mapping.
+float tDepth, tFace;
+vec3 tileRel(vec2 g) {
+  if (tDepth >= uDeep) {
+    vec2 d = (g - 0.5) * aTile.z;
+    vec3 C = aP0.xyz, Ju = vec3(aP0.w, aP1.xy), Jv = vec3(aP1.zw, aP2.x), Huu = aP2.yzw, Huv = aP3.xyz, Hvv = vec3(aP3.w, aP4);
+    return C + Ju * d.x + Jv * d.y + 0.5 * Huu * d.x * d.x + Huv * d.x * d.y + 0.5 * Hvv * d.y * d.y;
+  }
+  vec2 st = aTile.xy + g * aTile.z;
+  return normalize(spherify(cubePoint(tFace, st * 2.0 - 1.0))) - uOrigin;
 }
 
 // travelling swell on the water near the camera: long heavy swell on the deep outer ocean (canon: hostile), small
@@ -165,6 +183,7 @@ varying vec3 vNormal, vSphere, vView; varying vec2 vUvW; varying float vIn, vDep
 #include <common>
 #include <logdepthbuf_pars_fragment>
 ${GLSL_NOISE}
+${GLSL_MEADOW}
 ${GLSL_FOG}
 
 vec3 tonemap(vec3 c) { c *= uExposure; return c / (1.0 + c); }
@@ -271,6 +290,12 @@ void main() {
       // the canopy takes most of the direct sun; a few sun flecks get through
       float fleck = smoothstep(0.62, 0.8, vnoise(vSphere * 2400000.0 * 0.25));
       shade = under * (1.0 - meadow) * (0.72 - 0.5 * fleck);
+    }
+    // meadows in the forest seen from farther off: grass, not canopy (the same field thins the far forest, forest.js);
+    // up close the forest floor above takes over
+    if (abs(biome - 1.0) < 0.5) {
+      float meadowF = meadowNoise(vSphere, llDeg.x) * (1.0 - smoothstep(0.03, 0.09, distM / uRadiusM)) * (1.0 - under);
+      base = mix(base, base * vec3(1.45, 1.3, 0.75) + vec3(0.03, 0.03, 0.0), meadowF * 0.7);
     }
     // a narrow beach or rocky strand on the land side of the shoreline
     float strand = smoothstep(0.46, 0.5, cf) * (1.0 - smoothstep(0.6, 0.7, cf)) * closeK;

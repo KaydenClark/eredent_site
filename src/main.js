@@ -5,6 +5,9 @@ import { dir } from './geo.js';
 import { Heightfield } from './heightfield.js';
 import { Terrain } from './terrain.js';
 import { Atmosphere, Moons, makeClouds, makeStars, makeSun, setMoonRadiusCache, skyRadiance } from './sky.js';
+import { Forest } from './forest.js';
+import { Fauna } from './fauna.js';
+import { sharedUniforms } from './scatter.js';
 import { bindPanel, updateStats, setHud } from './panel.js';
 import { PLACES, SCENIC, placeById } from './places.js';
 import { biomeName, evidenceFor } from './biomes.js';
@@ -82,11 +85,15 @@ const ambient = new THREE.HemisphereLight(0x9fb8d8, 0x2a3020, 0.5); scene.add(am
 const clouds = makeClouds(tex.clouds, planet().radiusKm); scene.add(clouds);
 const moons = new Moons(tex.moons); scene.add(moons.group);
 const moonLight = { dirs: [new THREE.Vector3(), new THREE.Vector3()], light: [0, 0] };
+const seasonU = { value: settings.season };
+const scatterU = sharedUniforms(terrain.material.uniforms, seasonU);
+const forest = new Forest(scatterU, settings.quality); scene.add(forest.group);
+const fauna = new Fauna(scatterU, settings.quality, renderer.getPixelRatio()); scene.add(fauna.group);
 
 const vegetation = new Vegetation({ terrain, heightfield, scene, planet, quality: settings.quality });
 const dragons = new Dragons(scene, 5);
 const hooks = { planet: [() => vegetation.clear(), p => dragons.setRadius(p.radiusKm * 1000)], frame: [] };   // later layers (vegetation, sound) register here
-export const ctx = { THREE, vegetation, scene, camera, renderer, terrain, heightfield, rig, settings, planet, hooks, sunDir: new THREE.Vector3(), tex, meta };
+export const ctx = { THREE, vegetation, forest, fauna, scene, camera, renderer, terrain, heightfield, rig, settings, planet, hooks, sunDir: new THREE.Vector3(), tex, meta };
 
 // --- terrain source: the September penup build, or the Oct 10 revision built as a variant -------------------
 // Both stay inspectable; switching swaps the regional layers in place. Neither choice is a canon decision.
@@ -121,6 +128,7 @@ ctx.setTerrainSource = async name => {
 function applyPlanet() {
   const p = planet();
   terrain.setRadius(p.radiusKm); rig.setRadius(p.radiusKm * 1000);
+  forest.setRadius(p.radiusKm); fauna.setRadius(p.radiusKm);
   atmosphere.configure(p.radiusKm, p.atmosphereScale, p.airDensity * settings.atmo);
   moons.configure(p.radiusKm); setMoonRadiusCache(p.radiusKm);
   clouds.scale.setScalar(1 + 9000 / (p.radiusKm * 1000));
@@ -133,6 +141,7 @@ function applySettings() {
   terrain.detail = settings.detail;
   clouds.visible = settings.clouds; moons.group.visible = settings.moons;
   terrain.maxTiles = Math.round(1400 * Math.max(0.5, settings.quality));
+  vegetation.enabled = settings.trees; forest.visible = settings.trees; fauna.visible = settings.creatures; seasonU.value = settings.season;
 }
 applyPlanet(); applySettings();
 window.kiros = ctx;   // debug hook
@@ -418,6 +427,11 @@ function frame(forcedDt) {
   terrain.update(camera, settings.relief);
   vegetation.uniforms.uDay.value = dayK;
   vegetation.update(dt, camera, rig.latLon, alt);
+  {   // the GPU forest past the near ring, and the creatures (forest.js, fauna.js)
+    const ll = rig.latLon;
+    forest.update(ll.lat, ll.lon, alt, vegetation.group.visible ? vegetation._radius('trees') : 0);
+    fauna.update(ll.lat, ll.lon, alt);
+  }
   terrain.material.uniforms.uFloorDist.value = vegetation.group.visible ? vegetation._radius('trees') * 0.92 : 0;
   for (const fn of hooks.frame) fn(dt, { alt, ground, asl, dayK, sunUp });
   {

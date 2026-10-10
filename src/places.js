@@ -51,7 +51,20 @@ export const PLACES = [
   { id: 'north', name: 'Northern islands and the Ice Sea', kind: 'islands',
     view: { lat: 62, lon: 20, alt: 500e3, heading: 0, pitch: null, mode: 'orbit' },
     evidence: 'Drive description, Northern Islands: cold rocky belt; Icaia/Icala and Jerr Islands on older maps. Ice Sea is an older-map name.',
-    status: 'older-map name' }
+    status: 'older-map name' },
+  // low views over the forest, from the forest-and-creatures work (forest.js, fauna.js)
+  { id: 'fiira-shore', name: 'South Fiira rainforest shore, low', kind: 'shore',
+    view: { lat: 7.97, lon: -40.0, alt: 220, heading: 300, pitch: -9, mode: 'orbit' },
+    evidence: 'Spec, Biomes and vegetation: giant tropical rainforest in the low latitudes; palms on the inner-sea shores (proposed).',
+    status: 'derived' },
+  { id: 'dragon-coast', name: 'Dragon Islands rainforest coast, low', kind: 'coast',
+    view: { lat: 11.9, lon: -27.95, alt: 320, heading: 150, pitch: -10, mode: 'orbit' },
+    evidence: 'Drive description, Dragon Islands: volcanic archipelago; dragons nest on the land and hunt the outer ocean.',
+    status: 'derived' },
+  { id: 'create-clearings', name: 'Create, the mixed forest clearings', kind: 'forest',
+    view: { lat: 27.5, lon: 12.5, alt: 400, heading: 20, pitch: -12, mode: 'orbit' },
+    evidence: 'Spec, Biomes and vegetation: primeval mixed forest; meadows kept open by fire, windthrow and grazers (proposed).',
+    status: 'derived' }
 ];
 
 // Ground-level starts chosen from the built data (peaks, shores and zones found in the height and mask layers).

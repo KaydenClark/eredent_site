@@ -79,10 +79,29 @@ Steps: `masks` (land and water by nesting parity, lakes from blue ink, mountain 
 the outline grid) → `project` (placement on the sphere) → `terrain` (heights, lakes, bathymetry, zones) → `render`
 (color texture and globe textures) → `export_web` (regional textures and meta for the site).
 
+
+## Forest and creatures
+
+Two forests share the ground. Near the camera, `src/vegetation.js` builds the walkable forest on the CPU: giant trees
+out to ~2.6–5 km, understory, ground cover and rocks, with trunks a walker collides with. Past that ring, and above
+3.5 km where the near forest switches off, `src/forest.js` fills in on the GPU out to ~16 km: every tree is an
+instance on a lat/lon grid of cells around the camera (`src/scatter.js`), whose integer index hashes to a stable
+jitter, species and size, so nothing moves when the camera moves. Each instance samples the same height, mask and
+coast layers and the same fractal detail (`GLSL_DETAIL` in `src/shaders.js`) as the terrain, so it stands on the drawn
+ground. The far forest shrinks away inside the near forest's reach across the band where the near forest shrinks into
+its edge, so the two cross-fade rather than double up.
+
+`src/fauna.js` places the creatures the same way: dragons over the coasts and the open ocean (busiest at dawn and
+dusk), bird flocks, grazing megafauna in the mid-latitude meadows, sea giants surfacing in the inner seas and
+fireflies under the tropical and swamp canopy at night. `src/dragons.js` keeps its separate distant dragon flights.
+`Forest`, `Creatures` and `Dragons` in the panel switch the layers off. Species, canopy heights and bands follow the
+spec's "Biomes and vegetation" table; the numbers are proposed.
+
 ## Spec milestones
 
 1. Data layers: done, reproducible from `pipeline/`.
 2. Orbital globe: done.
 3. Seamless descent: done, now to standing height.
 4. Ground level (walk and fly, instanced vegetation, shoreline and waves): working prototype; see `docs/acceptance.md`.
-5. Life and sound: first pass (dragon silhouettes, synthesized ambience); no birds or megafauna models yet.
+5. Life and sound: first pass (dragons, bird flocks, grazers, sea giants, fireflies; synthesized ambience). Stand-in
+   shapes, not designed creatures.
