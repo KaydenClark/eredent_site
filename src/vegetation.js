@@ -3,6 +3,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { cellRand, vnoise } from './noise.js';
 import { zoneAt } from './biomes.js';
 import { GLSL_FOG } from './shaders.js';
+import { GLSL_NOISE } from './noise.js';
 
 // Instanced vegetation and rocks around the camera, placed deterministically on a latitude/longitude cell grid so
 // the same tree stands in the same place every visit. Three layers stream in chunks, nearest first:
@@ -153,7 +154,7 @@ const LAYERS = {
 const VERT = /* glsl */`
 precision highp float;
 attribute vec3 color;
-varying vec3 vColor, vN, vView; varying float vH;
+varying vec3 vColor, vN, vView, vObj; varying float vH;
 uniform float uTime, uRadiusM;
 #include <common>
 #include <logdepthbuf_pars_vertex>
@@ -174,17 +175,18 @@ void main() {
   #endif
   vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
   vView = (vec4(mv.xyz, 0.0) * viewMatrix).xyz;
-  vH = position.y;
+  vH = position.y; vObj = position;
   gl_Position = projectionMatrix * mv;
   #include <logdepthbuf_vertex>
 }`;
 const FRAG = /* glsl */`
-precision highp float;
+precision highp float; precision highp int;
 uniform vec3 uSunDir, uSunColor, uUp; uniform float uDay, uExposure, uRadiusM;
-varying vec3 vColor, vN, vView; varying float vH;
+varying vec3 vColor, vN, vView, vObj; varying float vH;
 #include <common>
 #include <logdepthbuf_pars_fragment>
 ${GLSL_FOG}
+${GLSL_NOISE}
 void main() {
   #include <logdepthbuf_fragment>
   vec3 N = normalize(vN);
@@ -194,7 +196,14 @@ void main() {
   float trans = pow(max(dot(-V, uSunDir), 0.0), 4.0) * 0.35;  // light through leaves against the sun
   float sky = 0.55 + 0.45 * dot(N, uUp);
   vec3 skyLight = mix(vec3(0.02, 0.03, 0.06), vec3(0.20, 0.27, 0.36), uDay) * sky;
-  vec3 col = vColor * (diff * uSunColor * 1.1 * uDay + skyLight + uSunColor * trans * uDay * vec3(0.8, 1.0, 0.5));
+  // leaf clumps and bark: break up the flat primitives (green-dominant colors are foliage, the rest bark or rock)
+  float leafy = step(vColor.r * 1.05, vColor.g);
+  float clump = vnoise(vObj * vec3(14.0, 18.0, 14.0)) * 0.6 + vnoise(vObj * 47.0) * 0.4;
+  float bark = vnoise(vObj * vec3(60.0, 6.0, 60.0));
+  vec3 base = vColor * mix(0.78 + 0.44 * bark, 0.62 + 0.75 * clump, leafy);
+  base = mix(base, base * vec3(0.9, 1.08, 0.82), leafy * smoothstep(0.55, 0.8, clump) * 0.6);   // sunlit young leaves
+  float selfShade = mix(1.0, 0.55 + 0.45 * smoothstep(0.25, 0.7, clump), leafy);                 // gaps inside the crown
+  vec3 col = base * (diff * selfShade * uSunColor * 1.1 * uDay + skyLight + uSunColor * trans * uDay * vec3(0.8, 1.0, 0.5));
   float alt = uCamAltM + dot(vView, uUp) * uRadiusM;
   col = applyFog(col, vView, alt, uRadiusM);
   col *= uExposure; col = col / (1.0 + col);

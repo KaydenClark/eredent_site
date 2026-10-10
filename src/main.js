@@ -268,6 +268,12 @@ ctx.applyLook = applyLook;
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key.toLowerCase() === 'l') { li = (li + 1) % LOOKS.length; applyLook(LOOKS[li]); e.preventDefault(); }
+    if (e.key.toLowerCase() === 'b' && !workshop.isOpen()) {         // bookmark this view: opens the notebook's form
+      if (document.pointerLockElement) document.exitPointerLock();
+      workshop.open('notebook');
+      setTimeout(() => { const b = [...document.querySelectorAll('.ws button')].find(x => x.textContent.trim() === 'Bookmark this view'); b?.click(); }, 50);
+      e.preventDefault();
+    }
   });
 }
 

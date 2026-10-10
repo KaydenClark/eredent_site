@@ -1,22 +1,10 @@
 # Kiros, before the first people
 
 An explorable 3D world of Kiros, the principal mapped region of Azlemzyk, built from the
-[Kiros World Build Spec](docs/SPEC.md). Environment only: no towns, labels or people.
+[Kiros World Build Spec](docs/SPEC.md), plus a workshop for questioning the sources it was built from.
+Environment only: no towns, labels or people in the world.
 
-Live site: https://kaydenclark.github.io/eredent_site/
-
-## What is here
-
-| Path | What it is |
-| --- | --- |
-| `index.html`, `src/` | The site. Vite + Three.js. One camera from orbit down to a few hundred meters above the ground. |
-| `pipeline/` | The Python steps that turn the penup outline and biome map into elevation, water and biome layers, then into the web textures. `config.json` holds every canon, derived and proposed number. |
-| `pipeline/source/` | The master drawings: `penup_20260912_182533.jpg` (coastlines, lakes in blue ink), the same drawing in black ink, and the biome map `kiros_v5.png`. |
-| `public/textures/`, `public/data/` | Built layers the site loads: regional 16-bit height, mask (water depth, protected sea, biome), color, clouds, the two moons, and `kiros_meta.json` with the projection and encodings. |
-| `docs/SPEC.md` | The spec, copied from the shared doc. The rules there win over the files. |
-| `docs/kiros-map-description.md` | The map description the spec draws on. |
-| `docs/acceptance.md` | The spec's acceptance checks and how each one is met or still open. |
-| `docs/kiros_map_previous_labeled.jpg` | The older hand-drawn labeled map, for names and history only. |
+Live site (main branch only): https://kaydenclark.github.io/eredent_site/
 
 ## Run it
 
@@ -25,8 +13,55 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:5173/. `npm run build` writes `dist/` for GitHub Pages; the workflow in
-`.github/workflows/deploy.yml` deploys `main` automatically.
+Open http://localhost:5173/. The welcome card offers one-click starts (forest, beach, Veir summit, Lake Veir shore,
+volcano, wetland, outer ocean, orbit). `?nowelcome` skips it.
+
+`npm test` runs the node:test suites (navigation, workshop store, brief, markdown reader). `npm run build` writes
+`dist/` for GitHub Pages; the workflow in `.github/workflows/deploy.yml` deploys `main` automatically.
+
+## Two halves
+
+**Immerse.** One camera from orbit to standing on the ground.
+- *Survey* (M): the original descent camera. Drag moves the ground, wheel or pinch changes height, right-drag or
+  Shift-drag turns and tilts.
+- *Walk* (G): lands where the middle of the screen points. WASD, arrows turn, Shift runs, Space jumps (the small
+  world has about a quarter of Earth's gravity). Wading into water slows you down.
+- *Fly* (V): WASD along the view, Space/E up, C/Q down, Shift boost; faster the higher you are.
+- Click the view to capture the mouse (Esc releases it), or drag to look. Wheel or `[` `]` set the speed. An on-screen
+  pad covers touch screens. `L` cycles the light (sunrise, midday, golden hour, a two-moon night), `Home` resets,
+  `H` shows help.
+- Generated stand-ins, not canon: trees, understory, ground cover and rocks by zone (Pandora-scale canopy heights
+  from the spec's proposed table), relief finer than about 1 km, dragon flights, ambient sound (off until enabled).
+
+**Develop.** The workshop (`J`, or the button at the top right).
+- *Sources*: every map, drawing, painting and text, zoomable, with role, frame, authority and the original file.
+- *Compare*: the September penup master against the Oct 10 outline (`kiros_earth_re.png`), registered to the same
+  grid: overlay, blink, swipe, lake table. "Drape on globe" lays either drawing's ink over the 3D terrain.
+- *Places*: named places with evidence and status (canon, derived, disputed, older-map name); Go flies there.
+- *Notebook*: notes, questions, proposals (kept visibly apart from canon), ideas and bookmarked views, saved in the
+  browser, with JSON export and validated import.
+- *Brief*: a markdown brief of open questions, proposals and source conflicts to paste into Claude or Codex.
+
+The Survey panel also switches the planet size (small world or Earth-sized) and the terrain source (September penup
+build, or the Oct 10 outline built as a variant when `public/textures/oct10/` exists).
+
+## What is here
+
+| Path | What it is |
+| --- | --- |
+| `index.html`, `src/` | The site. Vite + Three.js. `terrain.js`/`shaders.js` (precision-safe LOD sphere), `controls.js`/`nav.js` (camera rig, walk/fly physics), `vegetation.js`, `dragons.js`, `audio.js`, `workshop/` (the Develop half). |
+| `pipeline/` | Python steps that turn the penup outline and biome map into elevation, water and biome layers, then into web textures. `config.json` holds every canon, derived and proposed number. `compare_sources.py` registers the Oct 10 outline and measures what changed. |
+| `pipeline/source/` | The master drawings: `penup_20260912_182533.jpg` (coastlines, lakes in blue ink), the same drawing in black ink, and the biome map `kiros_v5.png`. |
+| `docs/drive-source/` | The six files from the linked Drive folder, byte-for-byte (see `manifest.json`); `docs/kiros-drive-description-2026-10-10.md` is the Google Doc text. |
+| `public/textures/`, `public/data/` | Built layers the site loads, the source overlays, and `source_comparison.json`. |
+| `docs/SPEC.md`, `docs/acceptance.md` | The spec, and where each acceptance check stands. |
+| `docs/source-comparison.md` | The September vs Oct 10 comparison, with numbers. |
+| `docs/MORNING-HANDOFF.md` | Start here after the overnight build: route, evidence, caveats, questions. |
+
+Previews of the private source maps (`public/sources/previews`, `thumbs`) are regenerated locally by
+`python pipeline/compare_sources.py` and are not committed. The workshop shows the original files through the dev
+server, so they are not part of `npm run build`. Merging to `main` publishes whatever is committed under `public/`
+and `src/` (including the small fallback thumbnails in `src/workshop/thumbs/`), so decide that first.
 
 ## Rebuild the layers
 
@@ -37,22 +72,12 @@ python pipeline/run_all.py
 
 Steps: `masks` (land and water by nesting parity, lakes from blue ink, mountain marks) → `register` (biome map onto
 the outline grid) → `project` (placement on the sphere) → `terrain` (heights, lakes, bathymetry, zones) → `render`
-(color texture and globe textures) → `export_web` (regional textures and meta for the site). Change a value in
-`pipeline/config.json` and run again; nothing in the site needs to change.
-
-## Controls
-
-Drag to move the ground under the pointer. Scroll or pinch to descend and climb. Right-drag, shift-drag or two fingers
-to turn and tilt. Keys: arrows or WASD move, `+`/`-` climb and descend, `Q`/`E` turn, `R`/`F` tilt. The camera looks
-straight down from orbit and tilts toward the horizon on its own as it gets close to the ground.
+(color texture and globe textures) → `export_web` (regional textures and meta for the site).
 
 ## Spec milestones
 
-1. Data layers: done, reproducible from `pipeline/`. Fractal detail below the data resolution is added on the GPU.
-2. Orbital globe: atmosphere (single scattering), depth-shaded ocean, clouds, day and night, two moons to scale.
-3. Seamless descent: one chunked level-of-detail sphere from orbit to a few hundred meters, no separate views.
-4. Ground level (walk and fly cameras, instanced vegetation): not started.
-5. Life and sound: not started.
-
-The planet-size toggle (small world or Earth-sized) and every "Proposed" value in the spec are runtime or
-`config.json` settings; see `src/settings.js` and `pipeline/config.json`.
+1. Data layers: done, reproducible from `pipeline/`.
+2. Orbital globe: done.
+3. Seamless descent: done, now to standing height.
+4. Ground level (walk and fly, instanced vegetation, shoreline and waves): working prototype; see `docs/acceptance.md`.
+5. Life and sound: first pass (dragon silhouettes, synthesized ambience); no birds or megafauna models yet.

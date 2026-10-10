@@ -20,9 +20,9 @@ The checks from the spec's "Build requirements" section, and where each one stan
 | --- | --- |
 | 1. Data layers on the penup master grid, fractal detail to about 50 m, planet size as a setting | Done. Layers rebuild from `pipeline/`; detail below the data resolution is added on the GPU (wavelengths 4 km, 850 m, 210 m, 53 m on the small world), faded by distance. Planet size is a toggle. |
 | 2. Orbital globe: atmosphere, ocean by depth, clouds, day and night, two moons to scale | Done. Single-scattering atmosphere, sun by time of day and season, ocean colored and shaded by depth and protection, cloud deck, moons sized to the chosen planet with phases. |
-| 3. Seamless descent to 1 km with no visible popping | Done to a few hundred meters. One chunked level-of-detail sphere (cube-sphere quadtree, 32×32 cells per tile, skirts) from orbit to the ground; splits are screen-size driven and the finest tiles go nearest the camera. |
-| 4. Ground level: walk and fly cameras, instanced vegetation, shoreline and waves | Not started. The data resolution (about 1.1 km per sample) means the ground still reads as painted terrain, not trees. |
-| 5. Life and sound | Not started. |
+| 3. Seamless descent to 1 km with no visible popping | Done, now down to standing height (1.7 m). Tiles within ~5 km are drawn relative to a local origin from per-tile second-order expansions computed in double precision, and the logarithmic depth is rescaled, so there is no float32 jitter or depth fighting at arm's length on either planet size. |
+| 4. Ground level: walk and fly cameras, instanced vegetation, shoreline and waves | Working prototype (2026-10-10). Walk and fly with continuous keys, mouse look, pointer lock, speed, jump, wading; ground height read on the CPU from the same integer-hash relief the GPU draws. Deterministic, chunk-streamed vegetation per zone (giant trees to ~2.6–5 km, understory, ground cover, rocks), shoreline pulled to the water, foam band, water body color and sky reflection up close. Stand-in species shapes, not designed flora. |
+| 5. Life and sound | First pass. Distant dragon silhouettes (seaward at dawn, home at dusk); synthesized wind, surf, birdsong, insects, crickets and rare far calls, off until enabled. No birds, sea life or megafauna models. |
 
 ## Findings for Kayden
 
@@ -34,3 +34,21 @@ The checks from the spec's "Build requirements" section, and where each one stan
   1.25× scale height and a slightly denser air (proposed); the "Air" slider changes density.
 - **Moons.** Orbit radii of 24 and 41 planet radii, periods of 9.5 and 21 days, small inclinations: all proposed so
   the sky has something to show. On the small world the larger moon spans about 2.4°, five times our Moon.
+
+## Overnight workbench checks (2026-10-10)
+
+From docs/KIROS-OVERNIGHT-BRIEF.md "Acceptance and evidence". Run on the build machine (RTX 5070, Chromium 152 in the
+Claude desktop browser pane); not measured on other hardware.
+
+| Check | Status | Evidence |
+| --- | --- | --- |
+| One startup command and URL | Met | `npm run dev` → http://localhost:5173/ |
+| Forest, shore and mountain reachable quickly | Met | Welcome card quick starts and the Go to list; each lands on foot in ~3–5 s. |
+| Walk, fly, escape, reset | Met (pointer-lock escape is browser-native, checked by hand only) | `test/nav.test.js`; keyboard playtest: 8.1 m walked in 2 s, 11.7 m running in 1 s, stops on release, keys cleared on window blur, eye height 1.7 m, low-gravity jump peak ~3 m. |
+| Every supplied source in the workshop, including the Doc text | Met | 22 gallery entries: the six Drive items, older maps, art references and four texts; originals open from the viewer. |
+| Note and bookmark survive reload; export/import; invalid data fails safely | Met | Saved via the UI, reloaded, both present. Export→replace import restores them; an item of kind "canon" and broken JSON are rejected with readable errors and storage unchanged. `test/store.test.js` (17 tests). |
+| Discrepancies explicit, no invented canon | Met | Compare tab, ink drape on the globe, place status badges, HUD source line, `docs/source-comparison.md`. Generated content is labeled as such in the welcome card, help and HUD. |
+| No towns, people, buildings, roads; no named rivers | Met | Nothing of the kind is generated. |
+| Failing test before navigation/state changes | Met | `test/nav.test.js` ran red (module missing) before `src/nav.js` existed; store/brief tests likewise before their modules. |
+| `npm run build` passes | Met | See the handoff for the last run time. |
+| Performance | Measured | 60 synchronous frames: ~2.6 ms GPU per frame at 1024×768 flying 370 m over the Ender forest (5.4 M triangles, 52 k instances, far-LOD trees); ~2.3 ms walking in the forest. |
