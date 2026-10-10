@@ -41,7 +41,7 @@ export class Terrain {
       vertexShader: TERRAIN_VERT, fragmentShader: TERRAIN_FRAG,
       uniforms: {
         uHeight: { value: textures.height }, uHeightSize: { value: new THREE.Vector2(textures.height.image.width, textures.height.image.height) },
-        uMask: { value: textures.mask }, uColor: { value: textures.color },
+        uMask: { value: textures.mask }, uColor: { value: textures.color }, uCoast: { value: textures.coast },
         uWindow: { value: new THREE.Vector4(w.lon[0], w.lat[0], w.lon[1], w.lat[1]) },
         uRadiusM: { value: 1692.7e3 }, uRelief: { value: 1 }, uDetail: { value: 1 }, uGridN: { value: N },
         uSunDir: { value: new THREE.Vector3(1, 0, 0) }, uSunColor: { value: new THREE.Color(1, 0.96, 0.9) },

@@ -48,6 +48,12 @@ mask[..., 2] = bio
 masks = cv2.resize(mask, (rw, rh), interpolation=cv2.INTER_NEAREST)
 Image.fromarray(masks, 'RGB').save(os.path.join(TEX, 'kiros_region_mask_4k.png'), optimize=True)
 
+# solid-ground fraction (0 water .. 1 land), softened by about one source pixel, for a smooth shoreline in the shader
+landf = np.load(build('landf.npy'))
+cf = np.where(inside, remap(landf), 0.0)
+cf = cv2.resize(cf, (rw, rh), interpolation=cv2.INTER_AREA)
+Image.fromarray(np.clip(cf * 255, 0, 255).astype(np.uint8), 'L').save(os.path.join(TEX, 'kiros_region_coast_4k.png'), optimize=True)
+
 # regional color crop from the 8k equirect
 col = np.asarray(Image.open(os.path.join(TEX, 'kiros_color_8k.jpg')).convert('RGB'))
 Image.fromarray(col[j0:j1, i0:i1]).save(os.path.join(TEX, 'kiros_region_color_8k.jpg'), quality=86)
@@ -66,11 +72,12 @@ meta['web'] = {
     'height16': {'file': 'textures/kiros_region_height16_4k.png', 'size': [rw, rh], 'encoding': 'meters = R*256 + G - 6000'},
     'mask': {'file': 'textures/kiros_region_mask_4k.png', 'size': [rw, rh], 'R': 'water depth m = R/255*5500', 'G': 'protected sea 0..1', 'B': 'biome index (water = 0 or 4)'},
     'biome_index': {'0': 'ocean', '1': 'forest', '2': 'desert', '3': 'wetland', '4': 'lake', '5': 'snow hatch', '6': 'bayou'},
+    'coast': {'file': 'textures/kiros_region_coast_4k.png', 'size': [rw, rh], 'L': 'solid ground fraction 0..1'},
     'color': {'file': 'textures/kiros_region_color_8k.jpg', 'size': [int(i1 - i0), int(j1 - j0)]},
     'ocean_globe': {'file': 'textures/kiros_ocean_2k.png', 'size': [2048, 1024]},
     'max_land_m': float(np.max(e[land])), 'min_ocean_m': float(np.min(e))
 }
 json.dump(meta, open(os.path.join(DATA, 'kiros_meta.json'), 'w'), indent=1)
 print('region', rw, rh, 'window', i0, j0, i1, j1, 'max land', meta['web']['max_land_m'])
-for f in ['kiros_region_height16_4k.png', 'kiros_region_mask_4k.png', 'kiros_region_color_8k.jpg', 'kiros_ocean_2k.png']:
+for f in ['kiros_region_height16_4k.png', 'kiros_region_mask_4k.png', 'kiros_region_coast_4k.png', 'kiros_region_color_8k.jpg', 'kiros_ocean_2k.png']:
     print(f, os.path.getsize(os.path.join(TEX, f)) // 1024, 'KB')

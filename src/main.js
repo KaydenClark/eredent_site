@@ -24,6 +24,7 @@ const loader = new THREE.TextureLoader();
 const loadTex = (name, opts = {}) => new Promise((res, rej) => loader.load(BASE + 'textures/' + name, t => {
   if (opts.srgb) t.colorSpace = THREE.SRGBColorSpace;
   if (opts.data) { t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.colorSpace = THREE.NoColorSpace; }
+  else if (opts.linear) { t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.colorSpace = THREE.NoColorSpace; }
   else { t.anisotropy = renderer.capabilities.getMaxAnisotropy(); }
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   res(t);
@@ -31,13 +32,13 @@ const loadTex = (name, opts = {}) => new Promise((res, rej) => loader.load(BASE 
 
 let tex;
 try {
-  const [color, height, mask, clouds, m1, m2] = await Promise.all([
+  const [color, height, mask, coast, clouds, m1, m2] = await Promise.all([
     loadTex('kiros_region_color_8k.jpg', { srgb: true }), loadTex('kiros_region_height16_4k.png', { data: true }),
-    loadTex('kiros_region_mask_4k.png', { data: true }), loadTex('kiros_clouds_2k.png', { srgb: true }),
+    loadTex('kiros_region_mask_4k.png', { data: true }), loadTex('kiros_region_coast_4k.png', { linear: true }), loadTex('kiros_clouds_2k.png', { srgb: true }),
     loadTex(MOONS[0].texture, { srgb: true }), loadTex(MOONS[1].texture, { srgb: true })
   ]);
   mask.magFilter = THREE.NearestFilter; mask.minFilter = THREE.NearestFilter;
-  tex = { color, height, mask, clouds, moons: [m1, m2] };
+  tex = { color, height, mask, coast, clouds, moons: [m1, m2] };
 } catch (e) {
   status.textContent = 'The map layers did not load. Reload the page to try again.'; throw e;
 }

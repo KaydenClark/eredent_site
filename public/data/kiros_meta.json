@@ -57,6 +57,14 @@
    "5": "snow hatch",
    "6": "bayou"
   },
+  "coast": {
+   "file": "textures/kiros_region_coast_4k.png",
+   "size": [
+    4096,
+    2478
+   ],
+   "L": "solid ground fraction 0..1"
+  },
   "color": {
    "file": "textures/kiros_region_color_8k.jpg",
    "size": [

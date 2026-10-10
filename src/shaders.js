@@ -31,7 +31,7 @@ attribute vec4 aTile;          // u0, v0, size, depth   (instance)
 attribute float aFace;         // cube face             (instance)
 uniform float uRelief, uDetail, uGridN;
 uniform sampler2D uMask;
-varying vec3 vNormal, vWorld, vSphere; varying vec2 vUvW; varying float vIn, vDepth, vAlt; varying vec3 vLocal;
+varying vec3 vNormal, vWorld, vSphere; varying vec2 vUvW; varying float vIn, vDepth, vAlt;
 #include <common>
 #include <logdepthbuf_pars_vertex>
 ${GLSL_GEO}
@@ -78,7 +78,6 @@ void main() {
   if (dot(N, n) < 0.0) N = -N;
   if (aSkirt > 0.5) p -= n * (aTile.z * 0.04);     // skirts hide the hairline cracks between LOD levels
   vNormal = N; vSphere = n; vUvW = uvW; vIn = inW; vDepth = aTile.w; vAlt = h;
-  vLocal = vec3(aTile.xy + clamp(aGrid, 0.0, 1.0) * aTile.z, aFace);   // face coordinates: precise enough for meter-scale noise
   vec4 w = modelMatrix * vec4(p, 1.0); vWorld = w.xyz;
   gl_Position = projectionMatrix * viewMatrix * w;
   #include <logdepthbuf_vertex>
@@ -87,11 +86,11 @@ void main() {
 
 export const TERRAIN_FRAG = /* glsl */`
 precision highp float;
-uniform sampler2D uColor, uMask;
+uniform sampler2D uColor, uMask, uCoast;
 uniform vec3 uSunDir, uSunColor, uAbyss;
 uniform vec3 uMoonDir[2]; uniform float uMoonLight[2];
 uniform float uTime, uExposure;
-varying vec3 vNormal, vWorld, vSphere; varying vec2 vUvW; varying float vIn, vDepth, vAlt; varying vec3 vLocal;
+varying vec3 vNormal, vWorld, vSphere; varying vec2 vUvW; varying float vIn, vDepth, vAlt;
 #include <common>
 #include <logdepthbuf_pars_fragment>
 ${GLSL_NOISE}
@@ -109,11 +108,13 @@ void main() {
     depth = m.r * 5500.0; inner = m.g; biome = floor(m.b * 255.0 + 0.5);
   }
   bool water = biome < 0.5 || abs(biome - 4.0) < 0.5;
+  // water fraction across the four nearest mask texels, so coasts do not step from texel to texel
+  float wf = vIn > 0.5 ? 1.0 - texture2D(uCoast, vUvW).r : 1.0;   // softened land fraction: a smooth shoreline
   float sunUp = dot(n, uSunDir);                              // -1 night .. 1 noon, by the sphere normal
   float day = smoothstep(-0.12, 0.25, sunUp);
 
-  vec3 col;
-  if (water) {
+  vec3 col, colLand, colWater;
+  {
     // small procedural ripple so the surface catches the sun; stronger swell on the deep outer ocean (canon: hostile)
     // calm inside the protected seas and lakes, long heavy swell on the deep outer ocean (canon)
     bool lake = abs(biome - 4.0) < 0.5;
@@ -121,8 +122,8 @@ void main() {
     vec3 nn = n;
     float near = clamp((vDepth - 5.0) / 3.0, 0.0, 1.0);
     if (near > 0.0) {
-      vec3 q1 = vec3(vLocal.xy * 24000.0, vLocal.z * 7.0) + vec3(uTime * 0.05, uTime * 0.03, 0.0);   // ~110 m waves
-      vec3 q2 = vec3(vLocal.xy * 180000.0, vLocal.z * 7.0) + vec3(-uTime * 0.25, uTime * 0.2, 0.0); // ~15 m ripple
+      vec3 q1 = vSphere * 15000.0 + vec3(uTime * 0.05, uTime * 0.03, 0.0);    // ~110 m waves
+      vec3 q2 = vSphere * 110000.0 + vec3(-uTime * 0.25, uTime * 0.2, 0.0);   // ~15 m ripple
       vec2 w = (vec2(vnoise(q1), vnoise(q1 + 3.7)) - 0.5) * 2.0 + (vec2(vnoise(q2), vnoise(q2 + 5.1)) - 0.5) * 0.8;
       vec3 ex = normalize(cross(vec3(0.0, 1.0, 0.0), n)); vec3 ey = cross(n, ex);   // tangent plane
       nn = normalize(n + (ex * w.x + ey * w.y) * swell * near);
@@ -132,13 +133,14 @@ void main() {
     float spec = pow(max(dot(R, V), 0.0), mix(600.0, 90.0, 1.0 - inner)) * mix(0.9, 0.45, 1.0 - inner);
     vec3 skyTint = mix(vec3(0.05, 0.09, 0.16), vec3(0.35, 0.55, 0.85), day);
     float diff = max(dot(nn, uSunDir), 0.0);
-    col = base * (0.04 + 0.96 * diff) * uSunColor + skyTint * (0.08 + 0.35 * fres) * day + uSunColor * spec * day * 1.6;
-  } else {
+    colWater = base * (0.04 + 0.96 * diff) * uSunColor + skyTint * (0.08 + 0.35 * fres) * day + uSunColor * spec * day * 1.6;
+  }
+  {
     // below the data resolution: canopy and ground texture so the land does not turn into a flat smear when close
     float near = clamp((vDepth - 6.0) / 4.0, 0.0, 1.0);
     if (near > 0.0) {
       // the two coarser octaves use the sphere position (seamless across cube faces); only the finest uses face coordinates
-      vec3 q1 = vSphere * 9000.0, q2 = vSphere * 54000.0, q3 = vec3(vLocal.xy * 420000.0, vLocal.z * 7.0);
+      vec3 q1 = vSphere * 9000.0, q2 = vSphere * 54000.0, q3 = vSphere * 250000.0;
       float m1 = vnoise(q1), m2 = vnoise(q2), m3 = vnoise(q3);
       float bright = dot(base, vec3(0.33));
       float amp = (abs(biome - 2.0) < 0.5) ? 0.22 : 0.55;              // desert sand is smoother than canopy
@@ -151,8 +153,9 @@ void main() {
     float diff = max(dot(N, uSunDir), 0.0);
     float sky = 0.5 + 0.5 * dot(N, n);                        // slopes facing the sky get more of it
     vec3 skyLight = mix(vec3(0.02, 0.03, 0.06), vec3(0.22, 0.30, 0.42), day) * sky;
-    col = base * (diff * uSunColor * 1.15 + skyLight);
+    colLand = base * (diff * uSunColor * 1.15 + skyLight);
   }
+  col = mix(colLand, colWater, wf);
   // two moons: faint silver fill on the night side, by phase and height (canon: nights can be bright, double shadows)
   for (int i = 0; i < 2; i++) {
     float md = max(dot(N, uMoonDir[i]), 0.0) * max(dot(n, uMoonDir[i]), 0.0);

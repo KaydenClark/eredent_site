@@ -80,9 +80,13 @@ lk = lakes
 ld = np.clip(nd.distance_transform_edt(lk) / (18 * U), 0, 1)[..., None]
 lcol = C(60, 130, 160) * (1 - ld) + C(18, 60, 105) * ld
 inner_deep = lk & (e < -200)
-img = np.where(land[..., None], colr, wcolr)
-img = np.where(lk[..., None], lcol, img)
+# soften the drawn pixel edge of the coast by about one source pixel; the penup line is the truth, its staircase is not
+landf = nd.gaussian_filter(land.astype(np.float32), 1.6)[..., None]
+lakef = nd.gaussian_filter(lk.astype(np.float32), 1.6)[..., None]
+img = colr * landf + wcolr * (1 - landf)
+img = img * (1 - lakef) + lcol * lakef
 img[inner_deep] = C(8, 26, 62)
+np.save(build('landf.npy'), (landf[..., 0] * (1 - lakef[..., 0])).astype(np.float32))
 coastband = (nd.distance_transform_edt(~land) <= 1.5) & ~land & (I < 0.5)
 img[coastband] = img[coastband] * 0.5 + C(200, 220, 225) * 0.5
 img = np.clip(img, 0, 255).astype(np.uint8)
