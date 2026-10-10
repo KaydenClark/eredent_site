@@ -89,7 +89,7 @@ export const SCENIC = [
     view: { lat: 20, lon: -5.5, alt: 250, heading: 285, pitch: -4, mode: 'fly' }, local: 10.5,
     evidence: 'Shallow, pale, god-protected water between the continents (canon).', status: 'canon' },
   { id: 's-outer', name: 'Over the outer ocean at dusk', kind: 'sea', zone: 'Deep outer ocean',
-    view: { lat: 20, lon: -70, alt: 40, heading: 270, pitch: -3, mode: 'fly' }, local: 18.6,
+    view: { lat: 20, lon: -70, alt: 30, heading: 40, pitch: -6, mode: 'fly' }, local: 18.6,
     evidence: 'Deep, dark, dangerous water; dragons hunt over it (canon).', status: 'canon' }
 ];
 

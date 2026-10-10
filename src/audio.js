@@ -19,7 +19,13 @@ export class Ambience {
     if (this.ctx.state !== 'running') await this.ctx.resume();
     this.on = true; this._applyVolume();
   }
-  disable() { this.on = false; if (this.ctx) this._applyVolume(); }
+  disable() {
+    this.on = false;
+    if (!this.ctx) return;
+    this._applyVolume();
+    clearTimeout(this._sleep);
+    this._sleep = setTimeout(() => { if (!this.on && this.ctx.state === 'running') this.ctx.suspend(); }, 1200);   // after the fade
+  }
   setVolume(v) { this.volume = v; this.save(); if (this.ctx) this._applyVolume(); }
   _applyVolume() { this.master.gain.setTargetAtTime(this.on ? this.volume * 0.7 : 0, this.ctx.currentTime, 0.3); }
 
