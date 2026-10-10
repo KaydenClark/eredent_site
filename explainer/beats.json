@@ -1,0 +1,27 @@
+{
+  "title": "The lake that sized a world",
+  "voice": { "engine": "sapi", "name": "Microsoft Zira Desktop", "rate": -1 },
+  "beats": [
+    { "id": 1, "line": "Before there were any people on Kiros, there was a drawing: coastlines and lakes in blue ink.",
+      "scene": "drawing", "seam": "peel", "carry": "coast" },
+    { "id": 2, "line": "Kayden wanted to stand inside it, from orbit all the way down to a lakeshore.",
+      "scene": "descent", "seam": "tear", "carry": "lake" },
+    { "id": 3, "line": "But a drawing has no scale. So one lake became the ruler for the whole world.",
+      "scene": "ruler", "seam": "slide", "carry": "lake" },
+    { "id": 4, "line": "Lake Veir is sized like Lake Bonneville, the ancient Utah lake: fifty-one thousand square kilometers.",
+      "scene": "bonneville", "seam": "draw", "carry": "none", "bar": "51,000 KM²", "bar_word": "fifty" },
+    { "id": 5, "line": "Put that lake on an Earth-sized planet, and the land only reaches nineteen degrees north.",
+      "scene": "band", "seam": "stamp", "carry": "band", "bar": "19°N", "bar_word": "nineteen" },
+    { "id": 6, "line": "That's all tropics. But the canon has taiga, snowfields and an Ice Sea far to the north.",
+      "ssml": "That's all tropics. But the canon has taiga, snowfields and an Ice <break time='150ms'/> Sea far to the north.",
+      "scene": "north", "seam": "flip", "carry": "none" },
+    { "id": 7, "line": "One answer: shrink the planet to about the size of our Moon, seventeen hundred kilometers in radius.",
+      "scene": "discs", "seam": "push", "carry": "none", "bar": "1,693 KM RADIUS", "bar_word": "seventeen" },
+    { "id": 8, "line": "Gravity falls to about a quarter of Earth's. Giant forests and flying dragons start making sense.",
+      "scene": "forest", "seam": "tear", "carry": "none", "bar": "0.27 G", "bar_word": "quarter" },
+    { "id": 9, "line": "A Python pipeline turns the ink into heights. Your browser builds the planet from them.",
+      "scene": "pipeline", "seam": "slide", "carry": "none" },
+    { "id": 10, "line": "Then a newer drawing moved Lake Veir four hundred forty kilometers. Which ruler wins is still undecided.",
+      "scene": "moved", "seam": "end", "carry": "none", "bar": "440 KM", "bar_word": "four" }
+  ]
+}

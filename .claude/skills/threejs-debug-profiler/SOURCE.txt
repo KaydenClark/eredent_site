@@ -1,0 +1,1 @@
+Source: https://github.com/majidmanzarpour/threejs-game-skills @ 8286774 (2026-09-27). Copied without agents/openai.yaml (Codex-only).

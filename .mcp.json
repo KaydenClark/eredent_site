@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@1.10.1",
+        "--no-usage-statistics",
+        "--no-performance-crux",
+        "--isolated"
+      ],
+      "env": {}
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@4.3.0"
+      ],
+      "env": {}
+    },
+    "spector": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "E:/GPT_OS/downloads/agent-tools/spector.js/mcp/dist/index.js"
+      ],
+      "env": {}
+    }
+  }
+}
