@@ -31,3 +31,7 @@ explainer/out/
 
 # local dev-server logs
 docs/playtest/*.log
+
+# Local consolidation archives include private source material; never publish them.
+.local-recovery/
+kiros_earth_scale.png

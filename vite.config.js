@@ -26,6 +26,7 @@ function stripDevOnly() {
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? '/eredent_site/' : '/',
   build: { target: 'es2022', sourcemap: false, chunkSizeWarningLimit: 1200 },
-  server: { port: 5173, strictPort: false },
+  // Refuse a duplicate preview instead of silently opening another port.
+  server: { host: '127.0.0.1', port: 5173, strictPort: true },
   plugins: [stripDevOnly()]
 }));

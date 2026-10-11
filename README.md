@@ -16,6 +16,24 @@ npm run dev
 Open http://localhost:5173/. The welcome card offers one-click starts (forest, beach, Veir summit, Lake Veir shore,
 volcano, wetland, outer ocean, orbit). `?nowelcome` skips it.
 
+### Shared local checkout and preview
+
+On this Windows host, Claude and Codex use `E:/GPT_OS/Projects/eredent_site`.
+Use the existing preview at `http://127.0.0.1:5173/`, or run `npm run dev` from
+that folder if it is stopped. The server refuses an occupied port so a second
+launch cannot silently create an extra preview. Coordinate concurrent edits;
+temporary worktrees require an explicit request and cleanup after integration.
+
+The October 11 consolidation retained all committed work from the retired
+worktrees in the `integration` history. Unfinished moon/planet edits are preserved
+on local branch `recovery/eredent-moon-unfinished-2026-10-11`; inspect that branch
+before resuming them. They are preserved work, not an accepted merge into the site.
+After saving current changes, that branch can be checked out in this same folder.
+Exact file archives, including local-only assets, and verified Git bundles are
+in `.local-recovery/2026-10-11-consolidation/`. Its `manifest.json` records archive
+hashes and original checkout state; `unfinished-work.json` names the recovery
+commit and files. Keep this directory private and out of Git.
+
 `npm test` runs the node:test suites (navigation, workshop store, brief, markdown reader). `npm run build` writes
 `dist/` for GitHub Pages; the workflow in `.github/workflows/deploy.yml` deploys `main` automatically.
 
