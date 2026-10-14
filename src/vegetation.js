@@ -396,7 +396,7 @@ void main() {
   float vs = max(dot(-V, uSunDir), 0.0);
   // light through leaves against the sun: strongest through thin blades and canopy undersides
   // (a thick crown's underside passes little; thin blades and the open undersides of conifer skirts pass more)
-  float under = shell * (1.0 - inside) * smoothstep(0.1, -0.7, dot(N, uUp));
+  float under = shell * (1.0 - inside) * (1.0 - smoothstep(-0.7, 0.1, dot(N, uUp)));
   float trans = leaf * (pow(vs, 4.0) * mix(0.3, 0.75, max(inside, 1.0 - shell)) + vs * vs * 0.04) * (1.0 - 0.75 * under);
   float sky = 0.55 + 0.45 * dot(N, uUp);
   vec3 skyLight = mix(vec3(0.02, 0.03, 0.06), vec3(0.20, 0.27, 0.36), uDay) * sky * (1.0 - 0.45 * inside);
