@@ -3,7 +3,11 @@ import { settings, set, PLANETS } from './settings.js';
 const $ = id => document.getElementById(id);
 const fmt = n => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
 
-export function bindPanel({ flyTo }) {
+export function bindPanel({ flyTo, places = [], scenic = [] }) {
+  const go = $('goto');
+  const group = (label, list) => { const g = document.createElement('optgroup'); g.label = label; for (const p of list) { const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; g.append(o); } go.append(g); };
+  group('On the ground', scenic); group('From above', places);
+  const q = $('quality'); q.value = String(settings.quality); if (!q.value) q.value = '1'; q.onchange = () => set({ quality: +q.value });
   $('sz-small').onclick = () => set({ size: 'small' });
   $('sz-earth').onclick = () => set({ size: 'earth' });
   const hour = $('hour'); hour.value = settings.hour; hour.oninput = () => { set({ hour: +hour.value, clock: false }); $('clock').checked = false; $('hour-out').textContent = fmtHour(+hour.value); };
@@ -13,7 +17,7 @@ export function bindPanel({ flyTo }) {
   $('relief-out').textContent = `${settings.relief}×`;
   const atmo = $('atmo'); atmo.value = settings.atmo; atmo.oninput = () => { set({ atmo: +atmo.value }); $('atmo-out').textContent = `${(+atmo.value).toFixed(1)}×`; };
   $('atmo-out').textContent = `${settings.atmo.toFixed(1)}×`;
-  for (const k of ['clock', 'clouds', 'moons', 'detail']) { const el = $(k); el.checked = settings[k]; el.onchange = () => set({ [k]: el.checked }); }
+  for (const k of ['clock', 'clouds', 'moons', 'detail', 'trees', 'creatures', 'wildlife']) { const el = $(k); el.checked = settings[k]; el.onchange = () => set({ [k]: el.checked }); }
   $('goto').onchange = () => { flyTo($('goto').value); $('goto').value = ''; };
   const hide = $('hide'), panel = $('panel');
   hide.onclick = () => { const m = panel.classList.toggle('min'); hide.textContent = m ? 'Show' : 'Hide'; hide.setAttribute('aria-expanded', String(!m)); };

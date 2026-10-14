@@ -3,7 +3,7 @@ globe textures (8K/4K color, 4K height, 16-bit elevation export, meta.json)."""
 import numpy as np, cv2, json
 from PIL import Image
 from scipy import ndimage as nd
-from common import CFG, U, build, TEX, DATA
+from common import CFG, U, build, TEX, META
 import os
 
 t = np.load(build('terrain.npz')); e = t['elev'].astype(np.float32); land = t['land']; lakes = t['lakes']
@@ -134,5 +134,5 @@ Image.fromarray(np.clip(e + 6000, 0, 65535).astype(np.uint16)).save(build('kiros
 json.dump({'note': 'Elevation PNG stores meters+6000 (uint16). Grid = penup outline (1362x1155) upsampled 2x.',
            'projection': 'azimuthal equidistant', 'center_lat_deg': float(c), 'center_lon_deg': 0.0, 'center_px_outline': [float(x0), float(y0)],
            'deg_per_outline_px': float(k), 'km_per_outline_px_bonneville_ruler': CFG['planet']['km_per_outline_px_small']},
-          open(os.path.join(DATA, 'kiros_meta.json'), 'w'), indent=1)
+          open(META, 'w'), indent=1)
 print('done', img.shape, eq.shape)

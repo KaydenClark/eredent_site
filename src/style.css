@@ -16,7 +16,7 @@ html, body { height: 100%; margin: 0; }
 body { background: var(--void); color: var(--ink); font: 14px/1.35 var(--f-ui); overflow: hidden; }
 #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 
-.name { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); top: calc(env(safe-area-inset-top, 0px) + 16px); pointer-events: none; }
+.name { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); top: calc(env(safe-area-inset-top, 0px) + 16px); pointer-events: none; text-shadow: 0 1px 6px rgba(0,0,0,.55), 0 0 2px rgba(0,0,0,.6); }
 .name h1 { font-family: var(--f-display); font-weight: 300; font-size: clamp(28px, 5vw, 46px); letter-spacing: .06em; margin: 0; line-height: 1; }
 .name p { margin: .35em 0 0; font-family: var(--f-display); font-style: italic; font-weight: 300; color: var(--mist); font-size: 15px; }
 
@@ -45,8 +45,9 @@ dt { color: var(--mist); } dd { margin: 0; font-family: var(--f-data); font-size
 #hide { all: unset; cursor: pointer; position: absolute; top: 10px; right: 12px; font-size: 12px; color: var(--mist); }
 .panel.min > :not(h2):not(#hide) { display: none; }
 
-.hud { position: fixed; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); font-family: var(--f-data); font-size: 11.5px; color: var(--mist);
-  text-align: right; pointer-events: none; white-space: pre-line; line-height: 1.5; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+.hud { position: fixed; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); font-family: var(--f-data); font-size: 11.5px; color: var(--ink);
+  text-align: right; pointer-events: none; white-space: pre-line; line-height: 1.5; text-shadow: 0 1px 2px rgba(0,0,0,.8);
+  background: rgba(4, 7, 13, .5); padding: 6px 9px; border-radius: 5px; }
 .credit { position: fixed; right: 16px; top: calc(env(safe-area-inset-top, 0px) + 16px); font-size: 11.5px; color: var(--mist); }
 .credit a { color: var(--shoal); text-decoration: none; }
 .credit a:hover { text-decoration: underline; }
@@ -56,3 +57,49 @@ dt { color: var(--mist); } dd { margin: 0; font-family: var(--f-data); font-size
   .hud { font-size: 10.5px; }
 }
 @media (prefers-reduced-motion: reduce) { .panel { backdrop-filter: none; } }
+
+/* --- movement modes, help, pad ------------------------------------------------------------------------- */
+.modes { position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top, 0px) + 14px); display: flex; gap: 2px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 3px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.modes button { all: unset; cursor: pointer; padding: 6px 11px; border-radius: 4px; font-size: 13px; color: var(--mist); white-space: nowrap; }
+.modes button:hover { color: var(--ink); }
+.modes button[aria-pressed="true"] { background: rgba(126, 201, 187, .18); color: var(--ink); }
+.modes button:focus-visible, .pad button:focus-visible, dialog button:focus-visible { outline: 2px solid var(--shoal); outline-offset: 2px; }
+kbd { font-family: var(--f-data); font-size: 10.5px; color: var(--mist); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-left: 2px; }
+.hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); font-size: 12.5px; color: var(--ink);
+  background: rgba(4, 7, 13, .55); border-radius: 4px; padding: 5px 10px; pointer-events: none; text-align: center; max-width: calc(100% - 32px); }
+body:not([data-mode="survey"])::after { content: ""; position: fixed; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%;
+  background: rgba(230, 236, 239, .55); pointer-events: none; }
+.pad { position: fixed; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 112px); display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); gap: 4px; }
+.pad[hidden] { display: none; }
+.pad button { all: unset; cursor: pointer; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); font-size: 15px; touch-action: none; user-select: none; }
+.pad button.on { background: rgba(126, 201, 187, .3); }
+.pad [data-k="forward"] { grid-column: 2; grid-row: 1; } .pad [data-k="left"] { grid-column: 1; grid-row: 2; }
+.pad [data-k="back"] { grid-column: 2; grid-row: 2; } .pad [data-k="right"] { grid-column: 3; grid-row: 2; }
+.pad [data-k="up"] { grid-column: 3; grid-row: 1; } .pad [data-k="down"] { grid-column: 3; grid-row: 3; } .pad [data-k="run"] { grid-column: 1; grid-row: 3; }
+dialog#help { max-width: min(860px, calc(100% - 32px)); background: rgba(8, 16, 24, .95); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 20px 24px; }
+dialog#help::backdrop { background: rgba(0, 0, 0, .45); }
+dialog#help h2 { margin: 0 0 12px; font: 300 24px var(--f-display); letter-spacing: .03em; }
+dialog#help h3 { margin: 0 0 4px; font-size: 12px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--shoal); }
+dialog#help p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+dialog#help .note { margin-top: 14px; color: var(--mist); }
+.help-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px 22px; }
+dialog#help form { margin-top: 16px; text-align: right; }
+dialog#help form button { all: unset; cursor: pointer; padding: 6px 14px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); }
+@media (max-width: 640px) { .modes kbd { display: none; } .modes button { padding: 6px 8px; } }
+.modes input[type=range] { width: 80px; accent-color: var(--shoal); align-self: center; margin: 0 6px; }
+
+dialog#welcome { max-width: min(760px, calc(100% - 32px)); background: rgba(8, 16, 24, .95); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 22px 26px; }
+dialog#welcome::backdrop { background: rgba(0, 0, 0, .35); }
+dialog#welcome h2 { margin: 0 0 8px; font: 300 30px var(--f-display); letter-spacing: .03em; }
+dialog#welcome h3 { margin: 16px 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--shoal); }
+dialog#welcome .lede { margin: 0; font: 300 16px/1.5 var(--f-display); color: var(--ink); }
+.starts { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 8px; }
+.starts button { all: unset; cursor: pointer; padding: 9px 11px; border: 1px solid var(--line); border-radius: 6px; display: grid; gap: 3px; }
+.starts button:hover, .starts button:focus-visible { background: rgba(126, 201, 187, .12); outline: 1px solid var(--shoal); }
+.starts b { font-weight: 500; font-size: 13.5px; } .starts span { font-size: 12px; color: var(--mist); }
+.welcome-row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 14px; font-size: 13px; color: var(--mist); }
+.welcome-row button, dialog#welcome form button { all: unset; cursor: pointer; padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); font-size: 13px; }
+.welcome-row button:focus-visible, dialog#welcome form button:focus-visible { outline: 2px solid var(--shoal); }
+dialog#welcome .note { margin: 14px 0 0; font-size: 12px; color: var(--mist); }
+dialog#welcome form { margin-top: 12px; text-align: right; }

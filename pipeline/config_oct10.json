@@ -1,0 +1,347 @@
+{
+  "_note": "Every value here is either Canon (from Kayden), Derived (calculated from canon) or Proposed (a default Kayden can override). See docs/SPEC.md. Changing a value and re-running the pipeline rebuilds the layers; nothing else needs to change.",
+  "grid": {
+    "outline_px": [
+      1362,
+      1155
+    ],
+    "upsample": 2
+  },
+  "placement": {
+    "_status": "Derived (stated in the spec): the drawn map is a top-down view centered on 37.2 N at 0.076 deg of arc per outline pixel",
+    "center_px_outline": [
+      678.0,
+      552.0
+    ],
+    "center_lat_deg": 37.2,
+    "deg_per_outline_px": 0.076,
+    "anchors_check": {
+      "_note": "Reported only. The two anchors cannot both be met exactly; the spec's stated placement is used and the solver is kept for reference (solve_anchors.py).",
+      "fiira_south_tip_px": [
+        235,
+        990
+      ],
+      "fiira_south_tip_lat": 0.0,
+      "northernmost_island_px": [
+        933,
+        47
+      ],
+      "northernmost_island_lat": 75.0
+    }
+  },
+  "planet": {
+    "_status": "Open question: option A or B",
+    "options": {
+      "small": {
+        "label": "Small world",
+        "radius_km": 1692.7,
+        "gravity_g": 0.27,
+        "lake_veir_km2": 51000
+      },
+      "earth": {
+        "label": "Earth-sized",
+        "radius_km": 6371.0,
+        "gravity_g": 1.0,
+        "lake_veir_km2": 722000
+      }
+    },
+    "km_per_outline_px_small": 2.2453,
+    "_variant": "variant: unchanged, but note that the small-world radius was derived from Lake Veir = Lake Bonneville (51,000 km2). The Oct 10 Lake Veir is ~7,850 km2 on that small world, so the ruler itself changed; see docs/oct10-variant.md."
+  },
+  "ranges": {
+    "_format": "x0,x1,y0,y1 in outline px; peak_m; sigma px at 2x; style rugged|rounded|volcanic; status",
+    "veir": {
+      "box": [
+        370,
+        560,
+        425,
+        730
+      ],
+      "peak_m": 4400,
+      "sigma": 26,
+      "style": "rugged",
+      "status": "comparison canon (Rockies), number derived",
+      "_variant": "variant, proposed: box [290,560,250,730] -> [370,560,425,730] so it holds exactly the Oct 10 Veir line (8 strokes from (527,432) SSW past the new lake to (391,711)) and none of the NW Fiira line. The three southern strokes also lie in the fiira_s box, as the southern Veir marks did in September; the Veir height wins there, as before."
+    },
+    "nw_fiira": {
+      "box": [
+        100,
+        410,
+        180,
+        424
+      ],
+      "peak_m": 2600,
+      "sigma": 20,
+      "style": "rugged",
+      "status": "proposed",
+      "_variant": "variant, proposed: box [100,260,180,320] -> [100,410,180,424]. The Oct 10 NW Fiira line is one continuous NW-SE zigzag from (162,248) to (409,430) in 7 strokes; with the September boxes 3 strokes fell outside every box (no relief) and its south-east 3 were lifted to the Veir height. The line is drawn separate from the Veir line (a ~110 px gap at y~420), so here it is one range at the nw_fiira height. Alternative: keep the September boxes and the line's SE end rises to Veir height."
+    },
+    "north_isle": {
+      "box": [
+        480,
+        700,
+        170,
+        260
+      ],
+      "peak_m": 2400,
+      "sigma": 18,
+      "style": "rugged",
+      "status": "proposed",
+      "_variant": "variant: the Oct 10 drawing has no marks in this box, so terrain.py builds no relief here (rule: mountains only where the outline has marks). Box and numbers kept for reference."
+    },
+    "roan": {
+      "box": [
+        690,
+        1000,
+        180,
+        600
+      ],
+      "peak_m": 3600,
+      "sigma": 22,
+      "style": "volcanic",
+      "status": "proposed (California ranges)"
+    },
+    "ne_isles": {
+      "box": [
+        1030,
+        1280,
+        90,
+        320
+      ],
+      "peak_m": 1800,
+      "sigma": 12,
+      "style": "rugged",
+      "status": "proposed",
+      "_variant": "variant: the Oct 10 drawing has no marks in this box, so terrain.py builds no relief here (rule: mountains only where the outline has marks). Box and numbers kept for reference."
+    },
+    "malos": {
+      "box": [
+        880,
+        1340,
+        330,
+        1030
+      ],
+      "peak_m": 2000,
+      "sigma": 24,
+      "style": "rounded",
+      "status": "comparison canon (Appalachians)"
+    },
+    "dragon": {
+      "box": [
+        290,
+        470,
+        780,
+        950
+      ],
+      "peak_m": 3300,
+      "sigma": 16,
+      "style": "volcanic",
+      "status": "proposed (Etna)"
+    },
+    "fiira_s": {
+      "box": [
+        360,
+        560,
+        590,
+        760
+      ],
+      "peak_m": 1400,
+      "sigma": 14,
+      "style": "rounded",
+      "status": "proposed"
+    }
+  },
+  "dragon_volcano": {
+    "center_px_outline": [
+      375,
+      845
+    ],
+    "summit_m": 3300,
+    "radius_px": 38,
+    "status": "one dominant cone is canon; height proposed"
+  },
+  "regions": {
+    "_format": "seed px (outline grid) and proposed upland base level in m",
+    "fiira": {
+      "seed": [
+        400,
+        600
+      ],
+      "base_m": 900
+    },
+    "ender": {
+      "seed": [
+        90,
+        560
+      ],
+      "base_m": 350
+    },
+    "roan": {
+      "seed": [
+        900,
+        280
+      ],
+      "base_m": 500
+    },
+    "malos": {
+      "seed": [
+        1150,
+        600
+      ],
+      "base_m": 180
+    },
+    "create": {
+      "seed": [
+        830,
+        580
+      ],
+      "base_m": 350
+    },
+    "dragon": {
+      "seed": [
+        370,
+        880
+      ],
+      "base_m": 250
+    },
+    "_variant": "unchanged; the old lake beds are now land and take their landmass base level"
+  },
+  "lakes": {
+    "veir": {
+      "surface_m": 1552,
+      "depth_m": 300,
+      "rim_m": 1650,
+      "select": "x<600",
+      "status": "derived from Lake Bonneville",
+      "basin_px": 15,
+      "depth_ramp_px": 10,
+      "_variant": "variant, proposed: level numbers kept from the spec (surface 1,552 m, ~300 m deep, rim 1,650 m) because it is the same named lake; the drawn lake is 0.17x the September area and ~440 km SSE (small world), inside the southern arm of the old Veir mark belt. basin_px 35 -> 15 and depth_ramp_px 25 -> 10 (outline px) scale the valley and the bowl to the smaller lake (basin by sqrt of the area ratio; ramp so the 300 m depth is reached at the centre). select 'x<600' unchanged: the new centroid is (443, 594)."
+    },
+    "sfere": {
+      "surface_m": 700,
+      "depth_m": 200,
+      "rim_m": 760,
+      "select": "780<x<960 and y<480",
+      "status": "proposed",
+      "basin_px": 5,
+      "depth_ramp_px": 3.5,
+      "_variant": "variant, proposed: levels unchanged (surface 700 m, 200 m deep). Drawn as a tiny figure-8 (~730 km2 small world, 0.06x). basin_px 20 -> 5, depth_ramp_px 12 -> 3.5 for the smaller lake. select unchanged: centroid (890, 400)."
+    },
+    "dire": {
+      "surface_m": -30,
+      "bed_m": -150,
+      "inner_floor_m": -600,
+      "rim_m": 20,
+      "select": "x>1000 and y>600",
+      "status": "below sea level canon; numbers proposed",
+      "basin_px": 12,
+      "depth_ramp_px": 8,
+      "_variant": "variant, proposed: surface -30 m (below sea level, canon), bed -150 m and rim 20 m unchanged. NO inner depression: the Oct 10 drawing has no inner loop, so inner_floor_m is unused. Narrow sliver ~190 x 50 km (small world, 0.08x) inside the western half of the old outline. basin_px 45 -> 12, depth_ramp_px 15 -> 8. select unchanged: centroid (1070, 809)."
+    }
+  },
+  "ocean": {
+    "inner_shelf_m": [
+      15,
+      150
+    ],
+    "outer_shelf_m": [
+      0,
+      200
+    ],
+    "abyss_m": [
+      4000,
+      5500
+    ],
+    "interior_closing_px": 130,
+    "status": "shallow inner and deep outer are canon; numbers proposed"
+  },
+  "climate": {
+    "_status": "proposed",
+    "bands_lat": {
+      "tropical": [
+        -90,
+        18
+      ],
+      "temperate": [
+        18,
+        48
+      ],
+      "boreal": [
+        48,
+        63
+      ],
+      "tundra": [
+        63,
+        99
+      ]
+    },
+    "snowline_m_by_lat": {
+      "0": 5000,
+      "30": 4000,
+      "45": 2900,
+      "60": 1650,
+      "75": 600
+    },
+    "snow_hatch_lowering_m": 600,
+    "treeline_below_snowline_m": 900,
+    "day_hours": 24,
+    "axial_tilt_deg": 23
+  },
+  "moons": {
+    "_status": "sizes canon; distances, colors and orbits proposed",
+    "larger": {
+      "radius_km": 868.7,
+      "note": "half of Earth's Moon",
+      "orbit_radii": 24,
+      "period_days": 9.5,
+      "tint": [
+        0.86,
+        0.84,
+        0.8
+      ]
+    },
+    "smaller": {
+      "radius_km": 579.1,
+      "note": "a third of Earth's Moon",
+      "orbit_radii": 41,
+      "period_days": 21,
+      "tint": [
+        0.78,
+        0.74,
+        0.7
+      ]
+    }
+  },
+  "web_export": {
+    "equirect_w": 8192,
+    "equirect_h": 4096,
+    "lat_range": [
+      -14,
+      84
+    ],
+    "lon_range": [
+      -84,
+      78
+    ]
+  },
+  "variant": {
+    "name": "oct10",
+    "label": "Oct 10 revision (variant)",
+    "status": "what-if for comparison; not a canon decision",
+    "doc": "docs/oct10-variant.md",
+    "ink_master": "public/sources/derived/earth_re_lines_master.png",
+    "ink_master_note": "kiros_earth_re ink registered onto the master grid by pipeline/compare_sources.py (homography, 0.83 px RMS); RGBA, coast #5a5a5a, mountain marks #b8742a, lakes #2f6fff. Coast ink is NOT used: land/water stays the penup master.",
+    "lake_rgb": [
+      47,
+      111,
+      255
+    ],
+    "mark_rgb": [
+      184,
+      116,
+      42
+    ],
+    "biome_reg_from": "pipeline/build/biome_reg.png",
+    "biome_reg_note": "kiros_v5 registered onto the outline grid by the September run of register.py; reused unchanged (the biome zones were drawn for the old lake and mark layout)"
+  }
+}
