@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { stripDevOnlyButtons } from './scripts/production-html.mjs';
 import { rmSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -12,6 +13,7 @@ function stripDevOnly() {
   let outDir = 'dist';
   return {
     name: 'kiros-strip-dev-only', apply: 'build',
+    transformIndexHtml: stripDevOnlyButtons,
     configResolved(c) { outDir = c.build.outDir; },
     closeBundle() {
       for (const p of DEV_ONLY) { const f = join(outDir, p); if (existsSync(f)) rmSync(f, { recursive: true, force: true }); }
