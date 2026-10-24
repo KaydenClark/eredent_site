@@ -11,3 +11,27 @@ pipeline/build/kiros_color_source.png
 kiros_layers.zip
 .DS_Store
 Thumbs.db
+
+# regenerable previews of private source maps (python pipeline/compare_sources.py); kept local, not published
+public/sources/previews/
+public/sources/thumbs/
+
+# variant builds (python pipeline/run_all.py --variant <name>): regenerable intermediates
+pipeline/build_*/
+
+# Kayden's private source maps and Drive originals: the dev-only workshop reads them locally (src/workshop/sources.js);
+# this repository is public, so they stay off it
+maps/
+docs/drive-source/
+docs/kiros_earth_scale.png
+docs/kiros-drive-description-*.md
+
+# explainer video build output (footage frames, voice, timings): regenerable from explainer/
+explainer/out/
+
+# local dev-server logs
+docs/playtest/*.log
+
+# Local consolidation archives include private source material; never publish them.
+.local-recovery/
+kiros_earth_scale.png

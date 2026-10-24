@@ -1,14 +1,17 @@
 """Acceptance checks from docs/SPEC.md that can be measured on the built layers.
-Run after the pipeline:  python pipeline/check_acceptance.py
+Run after the pipeline:  python pipeline/check_acceptance.py            (September build)
+                          python pipeline/check_acceptance.py --variant oct10
   1. Coastlines and lakes match the penup outline within 2 px of the master grid.
   2. Mountains only where the outline has marks, at the table heights (+-5%).
   3. Desert only in the yellow zones, wetland only in the purple zone.
   4. From orbit the inner seas are clearly paler than the outer ocean (measured on the color texture).
   5. No rivers were placed (nothing to measure: the pipeline has no river step)."""
-import numpy as np, cv2
+import numpy as np, cv2, os, sys
 from PIL import Image
 from scipy import ndimage as nd
-from common import CFG, U, OUTLINE, build
+if '--variant' in sys.argv:                       # must be set before common is imported
+    os.environ['KIROS_VARIANT'] = sys.argv[sys.argv.index('--variant') + 1]
+from common import CFG, U, OUTLINE, VARIANT, HERE, build
 
 ok = True
 def report(name, passed, detail):
@@ -25,8 +28,15 @@ land1 = cv2.resize(ground.astype(np.uint8), (W, H), interpolation=cv2.INTER_NEAR
 edge = land1 ^ nd.binary_erosion(land1)
 dist_to_edge = nd.distance_transform_edt(~edge)
 drawn = (L < 140) & ~m['glyph']                       # drawn lines that are not mountain marks
+if 'check_ink' in m.files:                            # variant: penup coast ink + the variant's lake ink (built by masks.py)
+    drawn = m['check_ink']
 d = dist_to_edge[drawn]
 frac = float((d <= 2).mean())
+if VARIANT:
+    sept = os.path.join(HERE, 'build', 'terrain.npz')
+    if os.path.exists(sept):
+        sl = np.load(sept)['land']; nd_ = int((sl != land).sum())
+        report('land/water identical to the September build', nd_ == 0, f'{nd_} of {sl.size} px differ')
 report('coastlines within 2 px', frac >= 0.97, f'{frac * 100:.1f}% of drawn coast and lake pixels lie within 2 px of the built edge (median {np.median(d):.1f} px)')
 
 # 2. range heights: summit per range within +-5% of the configured peak; no mountain-class land far from marks
@@ -44,7 +54,8 @@ for i, (cy, cx) in enumerate(cen):
         owner.setdefault(hits[0], []).append(i + 1)
 for name, r in ranges.items():
     if name not in owner:
-        print(f'skip {name}: all its strokes also fall inside another range box'); continue
+        n_any = sum(1 for cy, cx in cen if r['box'][0] <= cx <= r['box'][1] and r['box'][2] <= cy <= r['box'][3])
+        print(f'skip {name}: ' + ('all its strokes also fall inside another range box' if n_any else 'no marks drawn in its box (no relief built)')); continue
     strokes = np.isin(gl, owner[name])
     strokes = cv2.resize(strokes.astype(np.uint8), (e.shape[1], e.shape[0]), interpolation=cv2.INTER_NEAREST).astype(bool)
     sel = land & nd.binary_dilation(strokes, iterations=int(12 * U))

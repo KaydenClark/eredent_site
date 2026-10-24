@@ -3,7 +3,7 @@ All heights, lake levels and zone rules come from config.json (canon, derived or
 import numpy as np, cv2
 from PIL import Image
 from scipy import ndimage as nd
-from common import CFG, U, build
+from common import CFG, U, build, select_mask
 
 m = np.load(build('masks.npz'))
 
@@ -50,6 +50,9 @@ for name, r in CFG['ranges'].items():
         continue
     a, b, c0, c1 = r['box']; peak = r['peak_m']; sig = r['sigma']; style = r['style']
     sel = [i + 1 for i, (cy, cx) in enumerate(cen) if a <= cx / U <= b and c0 <= cy / U <= c1]
+    if not sel:                                     # no marks drawn in this range's box: no relief (canon rule)
+        print('range', name, 'has no marks: skipped')
+        continue
     f = np.isin(gl, sel).astype(np.float32)
     f = nd.gaussian_filter(f, sig); f /= (f.max() + 1e-6)
     fields[name] = (f, peak, style)
@@ -91,22 +94,28 @@ cone = np.exp(-(r / dv['radius_px']) ** 1.6)
 elev = np.where(land, np.maximum(elev, dv['summit_m'] * cone * (0.95 + 0.05 * n3)), elev)
 
 # lakes
+# lakes: selection rules, levels and (optional) basin / depth-ramp widths in outline px from config; the defaults
+# below are the widths the September build was tuned with
 LK = CFG['lakes']
-veir = lakes & (xx < 600)
+lv, ls, ld_ = LK['veir'], LK['sfere'], LK['dire']
+veir = lakes & select_mask(lv['select'], xx, yy)
 dvo = nd.distance_transform_edt(~veir) / U; dvi = nd.distance_transform_edt(veir) / U
-basin = np.exp(-dvo / 35)
-elev = np.where(land, elev * (1 - basin) + (LK['veir']['rim_m'] + 150 * n2) * basin, elev)
-elev = np.where(veir, LK['veir']['surface_m'] - LK['veir']['depth_m'] * np.clip(dvi / 25, 0, 1) ** 0.7, elev)
-sf = lakes & (xx > 780) & (xx < 960) & (yy < 480)
-ds = nd.distance_transform_edt(sf) / U; dso = nd.distance_transform_edt(~sf) / U; bs = np.exp(-dso / 20)
-elev = np.where(land, elev * (1 - bs) + (LK['sfere']['rim_m'] + 60 * n2) * bs, elev)
-elev = np.where(sf, LK['sfere']['surface_m'] - LK['sfere']['depth_m'] * np.clip(ds / 12, 0, 1) ** 0.7, elev)
-dl = lakes & (xx > 1000) & (yy > 600)
-dd = nd.distance_transform_edt(dl) / U; ddo = nd.distance_transform_edt(~dl) / U; bd = np.exp(-ddo / 45)
-elev = np.where(land, elev * (1 - bd) + (LK['dire']['rim_m'] + 30 * n2) * bd, elev)
+basin = np.exp(-dvo / lv.get('basin_px', 35))
+elev = np.where(land, elev * (1 - basin) + (lv['rim_m'] + 150 * n2) * basin, elev)
+elev = np.where(veir, lv['surface_m'] - lv['depth_m'] * np.clip(dvi / lv.get('depth_ramp_px', 25), 0, 1) ** 0.7, elev)
+sf = lakes & select_mask(ls['select'], xx, yy)
+ds = nd.distance_transform_edt(sf) / U; dso = nd.distance_transform_edt(~sf) / U; bs = np.exp(-dso / ls.get('basin_px', 20))
+elev = np.where(land, elev * (1 - bs) + (ls['rim_m'] + 60 * n2) * bs, elev)
+elev = np.where(sf, ls['surface_m'] - ls['depth_m'] * np.clip(ds / ls.get('depth_ramp_px', 12), 0, 1) ** 0.7, elev)
+dl = lakes & select_mask(ld_['select'], xx, yy)
+dd = nd.distance_transform_edt(dl) / U; ddo = nd.distance_transform_edt(~dl) / U; bd = np.exp(-ddo / ld_.get('basin_px', 45))
+elev = np.where(land, elev * (1 - bd) + (ld_['rim_m'] + 30 * n2) * bd, elev)
 di = nd.distance_transform_edt(inner) / U
-elev = np.where(dl, LK['dire']['surface_m'] + (LK['dire']['bed_m'] - LK['dire']['surface_m']) * np.clip(dd / 15, 0, 1), elev)
-elev = np.where(inner, LK['dire']['bed_m'] + (LK['dire']['inner_floor_m'] - LK['dire']['bed_m']) * np.clip(di / 14, 0, 1) ** 0.8, elev)
+elev = np.where(dl, ld_['surface_m'] + (ld_['bed_m'] - ld_['surface_m']) * np.clip(dd / ld_.get('depth_ramp_px', 15), 0, 1), elev)
+if inner.any():                                     # Dire Lake's inner depression, where one is drawn
+    elev = np.where(inner, ld_['bed_m'] + (ld_['inner_floor_m'] - ld_['bed_m']) * np.clip(di / 14, 0, 1) ** 0.8, elev)
+for nm, msk in (('veir', veir), ('sfere', sf), ('dire', dl | inner)):
+    print('lake', nm, 'px (2x grid)', int(msk.sum()), 'deepest', round(float(elev[msk].min()), 1) if msk.any() else None)
 lake_surface = np.where(veir, LK['veir']['surface_m'], np.where(sf, LK['sfere']['surface_m'], np.where(dl | inner, LK['dire']['surface_m'], 0))).astype(np.float32)
 
 # biome zones from the registered biome map (yellow = desert, purple = wetland, grey hatch = snow)
@@ -114,6 +123,8 @@ bm = cv2.imread(build('biome_reg.png')); bm = cv2.resize(bm, (W, H), interpolati
 bb, gg, rr = bm[..., 0], bm[..., 1], bm[..., 2]
 yellow = (rr > 200) & (gg > 190) & (bb < 120)
 purple = (bb > rr + 5) & (bb > 150) & (gg < bb - 10) & (rr > 110) & (rr < 190) & ~lakes
+if 'v5_lake_zone' in m.files:                      # variant: v5's old lake fill is not a wetland zone
+    purple &= ~(up(m['v5_lake_zone']) > 0.5)
 grey_hatch = (abs(rr - gg) < 10) & (abs(gg - bb) < 12) & (rr < 195) & (rr > 140)
 
 

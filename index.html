@@ -28,6 +28,12 @@
     <button id="sz-earth" aria-pressed="false">Earth-sized<br><span>land scaled up</span></button>
   </div>
 
+  <div class="seg" role="group" aria-label="Terrain source">
+    <button id="ts-sept" aria-pressed="true">September penup<br><span>built terrain (current)</span></button>
+    <button id="ts-oct10" aria-pressed="false" data-dev-only>Oct 10 outline<br><span>variant: small lakes</span></button>
+  </div>
+  <p class="note" id="ts-note" hidden></p>
+
   <dl id="stats"></dl>
 
   <div class="row"><label for="hour">Time of day</label><input id="hour" type="range" min="0" max="24" step="0.05" value="10.5"><output id="hour-out">10:30</output></div>
@@ -40,23 +46,28 @@
     <label><input id="clouds" type="checkbox" checked> Clouds</label>
     <label><input id="moons" type="checkbox" checked> Moons</label>
     <label><input id="detail" type="checkbox" checked> Fine detail</label>
+    <label><input id="trees" type="checkbox" checked> Forest</label>
+    <label><input id="creatures" type="checkbox" checked> Creatures</label>
+    <label><input id="wildlife" type="checkbox" checked> Dragons</label>
   </div>
 
-  <div class="row"><label for="goto">Fly to</label>
-    <select id="goto">
+  <div class="row"><label for="goto">Go to</label>
+    <select id="goto"><option value="">—</option></select>
+  </div>
+  <div class="row"><label for="look">Light</label>
+    <select id="look">
       <option value="">—</option>
-      <option value="orbit">Orbit, whole cluster</option>
-      <option value="veir">Lake Veir and the Veir Mountains</option>
-      <option value="veir-ground">Veir shoreline, 2 km up</option>
-      <option value="sfere">Sfere and the Roan ranges</option>
-      <option value="dire">Dire Lake basin</option>
-      <option value="malos-wet">Malos east wetlands</option>
-      <option value="dragon">Dragon Islands volcano</option>
-      <option value="create">Create and the break zone</option>
-      <option value="ender">Ender</option>
-      <option value="inner-sea">Inner sea between Fiira and Roan</option>
-      <option value="outer">Outer ocean, west of Ender</option>
-      <option value="north">Northern islands and the Ice Sea</option>
+      <option value="sunrise">Sunrise here</option>
+      <option value="noon">Midday here</option>
+      <option value="golden">Golden hour here</option>
+      <option value="moons">Two-moon night here</option>
+    </select>
+  </div>
+  <div class="row"><label for="quality">Quality</label>
+    <select id="quality">
+      <option value="0.6">Fast</option>
+      <option value="1">Balanced</option>
+      <option value="1.35">Fine</option>
     </select>
   </div>
 
@@ -64,6 +75,71 @@
 </section>
 
 <aside class="hud" id="hud" aria-live="off"></aside>
+
+<nav class="modes" aria-label="Movement mode">
+  <button id="m-explore" title="Quick starts and what this is">Explore</button>
+  <button id="m-survey" aria-pressed="true" title="Survey from above (M)">Survey <kbd>M</kbd></button>
+  <button id="m-walk" aria-pressed="false" title="Walk on the ground at the middle of the screen (G)">Walk <kbd>G</kbd></button>
+  <button id="m-fly" aria-pressed="false" title="Fly (V)">Fly <kbd>V</kbd></button>
+  <button id="m-help" title="Controls and help (H)">Help <kbd>H</kbd></button>
+  <button id="m-reset" title="Back to orbit (Home)">Reset</button>
+  <button id="m-sound" aria-pressed="false" title="Ambient sound (synthesized wind, water and wildlife)">Sound off</button>
+  <input id="vol" type="range" min="0" max="1" step="0.05" aria-label="Sound volume" hidden>
+</nav>
+
+<div class="hint" id="hint" hidden></div>
+
+<div class="pad" id="pad" hidden aria-label="On-screen movement">
+  <button data-k="forward" aria-label="Forward">▲</button>
+  <button data-k="left" aria-label="Left">◀</button>
+  <button data-k="back" aria-label="Back">▼</button>
+  <button data-k="right" aria-label="Right">▶</button>
+  <button data-k="up" aria-label="Up or jump">⤒</button>
+  <button data-k="down" aria-label="Down">⤓</button>
+  <button data-k="run" aria-label="Run or boost">»</button>
+</div>
+
+<dialog id="welcome" aria-labelledby="welcome-title">
+  <h2 id="welcome-title">Kiros, before the first people</h2>
+  <p class="lede">Twenty years of a world, as it stands in the sources tonight: walk it, fly it, and question it. The ground is built from Kayden's September penup outline and biome map<span data-dev-only>; the newest drawing and every older map are in the workshop</span>.</p>
+  <h3>Start somewhere</h3>
+  <div class="starts">
+    <button data-go="s-forest"><b>Walk a primeval forest</b><span>Northern Ender, mid-morning</span></button>
+    <button data-go="s-beach"><b>Stand on an equatorial beach</b><span>Southern Malos, morning</span></button>
+    <button data-go="s-veir-peak"><b>Climb the Veir range</b><span>Summit ridge at sunrise</span></button>
+    <button data-go="s-veir-shore"><b>Lake Veir shore</b><span>As built from the September outline</span></button>
+    <button data-go="s-veir-oct10" data-dev-only><b>Oct 10 Lake Veir</b><span>The newest drawing, built as a variant</span></button>
+    <button data-go="s-volcano"><b>Dragon Islands volcano</b><span>Rim of the central cone</span></button>
+    <button data-go="s-wetland"><b>Malos wetlands</b><span>Swamp forest east of the Spine</span></button>
+    <button data-go="s-outer"><b>Over the outer ocean</b><span>Low flight at dusk</span></button>
+    <button data-go="orbit"><b>See the whole cluster</b><span>From orbit</span></button>
+  </div>
+  <div class="welcome-row">
+    <button id="w-workshop" data-dev-only>Open the workshop <kbd>J</kbd></button>
+    <button id="w-help">Controls <kbd>H</kbd></button>
+    <label><input type="checkbox" id="w-skip"> Don't show this at start</label>
+  </div>
+  <p class="note">Trees, rocks, sound and the relief finer than about 1 km are generated stand-ins, not canon. No towns, roads, labels or people anywhere in the world.</p>
+  <form method="dialog"><button>Just look around</button></form>
+</dialog>
+
+<dialog id="help" aria-labelledby="help-title">
+  <h2 id="help-title">Moving around Kiros</h2>
+  <div class="help-cols">
+    <section><h3>Survey <kbd>M</kbd></h3>
+      <p>Drag to move the ground. Wheel or pinch to descend. Right-drag or Shift-drag to turn and tilt. Keys: WASD/arrows pan, <kbd>+</kbd>/<kbd>−</kbd> height, <kbd>Q</kbd>/<kbd>E</kbd> turn, <kbd>R</kbd>/<kbd>F</kbd> tilt.</p></section>
+    <section><h3>Walk <kbd>G</kbd></h3>
+      <p>Lands you where the middle of the screen points. <kbd>W A S D</kbd> walk, arrows turn, <kbd>Shift</kbd> run, <kbd>Space</kbd> jump (the small world has about a quarter of Earth's gravity). Wading slows you down.</p></section>
+    <section><h3>Fly <kbd>V</kbd></h3>
+      <p><kbd>W A S D</kbd> along the view, <kbd>Space</kbd>/<kbd>E</kbd> up, <kbd>C</kbd>/<kbd>Q</kbd> down, <kbd>Shift</kbd> boost. You go faster the higher you are.</p></section>
+    <section><h3>Looking and speed</h3>
+      <p>Click the view to capture the mouse; <kbd>Esc</kbd> releases it. Without capture, drag to look. Wheel or <kbd>[</kbd> <kbd>]</kbd> change speed. Touch screens get an on-screen pad; <kbd>P</kbd> shows it anywhere.</p></section>
+    <section><h3>Anywhere</h3>
+      <p><kbd>Home</kbd> or Reset returns to orbit. <kbd>L</kbd> cycles the light: sunrise, midday, golden hour, a two-moon night. <kbd>J</kbd> opens the workshop: sources, comparisons, notes and bookmarks; <kbd>B</kbd> bookmarks the view you are looking at.</p></section>
+  </div>
+  <p class="note">The ground is the September penup master. Trees, rocks and the fine relief below about 1 km are generated, not drawn by Kayden. No towns, roads, labels or people anywhere.</p>
+  <form method="dialog"><button>Close</button></form>
+</dialog>
 
 <footer class="credit"><a href="https://github.com/KaydenClark/eredent_site" rel="noopener">source</a> · built from the Kiros World Build Spec</footer>
 

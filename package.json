@@ -4,9 +4,11 @@
   "description": "Kiros, before the first people. An explorable 3D world built from the Kiros World Build Spec.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/check-dist.mjs",
+    "test": "node --test \"test/**/*.test.js\"",
     "preview": "vite preview",
-    "pipeline": "python pipeline/run_all.py"
+    "pipeline": "python pipeline/run_all.py",
+    "check:dist": "node scripts/check-dist.mjs"
   },
   "repository": {
     "type": "git",
