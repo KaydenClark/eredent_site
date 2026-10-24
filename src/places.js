@@ -106,4 +106,7 @@ export const SCENIC = [
     evidence: 'Deep, dark, dangerous water; dragons hunt over it (canon).', status: 'canon' }
 ];
 
+// The Oct 10 terrain is dev-only (stripped from the public build), so places that switch to it are too.
+export const scenicFor = ({ dev }) => dev ? SCENIC : SCENIC.filter(p => p.terrain !== 'oct10');
+
 export const placeById = id => PLACES.find(p => p.id === id) || SCENIC.find(p => p.id === id);

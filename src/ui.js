@@ -67,7 +67,8 @@ export function initUi({ rig, ctx, places, goPlace }) {
   skip.checked = skipped;
   skip.onchange = () => { try { localStorage.setItem('kiros.skipWelcome', skip.checked ? '1' : '0'); } catch {} };
   for (const b of welcome.querySelectorAll('[data-go]')) b.onclick = () => { welcome.close(); goPlace(b.dataset.go); };
-  $('w-workshop').onclick = () => { welcome.close(); ctx.workshop?.open(); };
+  const ws = $('w-workshop');                              // dev-only, stripped from the public build
+  if (ws) ws.onclick = () => { welcome.close(); ctx.workshop?.open(); };
   $('w-help').onclick = () => { welcome.close(); help.showModal(); };
   $('m-explore').onclick = () => welcome.showModal();
   if (!skipped && !new URLSearchParams(location.search).has('nowelcome')) setTimeout(() => { if (!document.querySelector('dialog[open]')) welcome.showModal(); }, 600);

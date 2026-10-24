@@ -30,7 +30,7 @@
 
   <div class="seg" role="group" aria-label="Terrain source">
     <button id="ts-sept" aria-pressed="true">September penup<br><span>built terrain (current)</span></button>
-    <button id="ts-oct10" aria-pressed="false">Oct 10 outline<br><span>variant: small lakes</span></button>
+    <button id="ts-oct10" aria-pressed="false" data-dev-only>Oct 10 outline<br><span>variant: small lakes</span></button>
   </div>
   <p class="note" id="ts-note" hidden></p>
 
@@ -101,7 +101,7 @@
 
 <dialog id="welcome" aria-labelledby="welcome-title">
   <h2 id="welcome-title">Kiros, before the first people</h2>
-  <p class="lede">Twenty years of a world, as it stands in the sources tonight: walk it, fly it, and question it. The ground is built from Kayden's September penup outline and biome map; the newest drawing and every older map are in the workshop.</p>
+  <p class="lede">Twenty years of a world, as it stands in the sources tonight: walk it, fly it, and question it. The ground is built from Kayden's September penup outline and biome map<span data-dev-only>; the newest drawing and every older map are in the workshop</span>.</p>
   <h3>Start somewhere</h3>
   <div class="starts">
     <button data-go="s-forest"><b>Walk a primeval forest</b><span>Northern Ender, mid-morning</span></button>
@@ -115,7 +115,7 @@
     <button data-go="orbit"><b>See the whole cluster</b><span>From orbit</span></button>
   </div>
   <div class="welcome-row">
-    <button id="w-workshop">Open the workshop <kbd>J</kbd></button>
+    <button id="w-workshop" data-dev-only>Open the workshop <kbd>J</kbd></button>
     <button id="w-help">Controls <kbd>H</kbd></button>
     <label><input type="checkbox" id="w-skip"> Don't show this at start</label>
   </div>

@@ -9,7 +9,7 @@ import { Forest } from './forest.js';
 import { Fauna } from './fauna.js';
 import { sharedUniforms } from './scatter.js';
 import { bindPanel, updateStats, setHud } from './panel.js';
-import { PLACES, SCENIC, placeById } from './places.js';
+import { PLACES, scenicFor, placeById } from './places.js';
 import { biomeName, evidenceFor } from './biomes.js';
 import { initUi } from './ui.js';
 import { Vegetation } from './vegetation.js';
@@ -237,9 +237,10 @@ ctx.setOverlay = (name, opacity = 0.85) => {
   return p.then(t => { u.uOverlay.value = t; u.uOverlayOn.value = opacity; ctx.overlay = { name, opacity }; })
     .catch(() => { u.uOverlayOn.value = 0; delete overlays[name]; console.warn('overlay not available:', file); });
 };
-bindPanel({ flyTo: goPlace, places: PLACES, scenic: SCENIC });
+const scenic = scenicFor({ dev: import.meta.env.DEV });
+bindPanel({ flyTo: goPlace, places: PLACES, scenic });
 const ui = initUi({ rig, ctx, places: PLACES, goPlace });
-const ALL_PLACES = [...SCENIC, ...PLACES];
+const ALL_PLACES = [...scenic, ...PLACES];
 // The workshop shows Kayden's private source maps and lore, so it only runs from the local dev server: a production
 // build (GitHub Pages) leaves the module, its thumbnails and the Drive references out entirely.
 let workshop = { open() { alert('The workshop runs on the local dev server only (npm run dev), so the private sources stay off the public site.'); }, close() {}, isOpen: () => false };
@@ -256,7 +257,7 @@ if (import.meta.env.DEV) {
 ctx.workshop = workshop;
 {
   const a = document.getElementById('ts-sept'), b = document.getElementById('ts-oct10'), note = document.getElementById('ts-note');
-  const sync = () => { a.setAttribute('aria-pressed', String(ctx.terrainSource === 'sept')); b.setAttribute('aria-pressed', String(ctx.terrainSource === 'oct10')); };
+  const sync = () => { a.setAttribute('aria-pressed', String(ctx.terrainSource === 'sept')); b?.setAttribute('aria-pressed', String(ctx.terrainSource === 'oct10')); };
   const go = async name => {
     placeReq++;                                            // cancels a pending quick start
     note.hidden = false; note.textContent = 'Loading…';
@@ -267,7 +268,7 @@ ctx.workshop = workshop;
     } catch { note.textContent = 'The Oct 10 variant has not been built on this machine yet (public/textures/oct10/).'; }
     sync();
   };
-  a.onclick = () => go('sept'); b.onclick = () => go('oct10');
+  a.onclick = () => go('sept'); if (b) b.onclick = () => go('oct10');   // b is dev-only
 }
 
 // --- lighting looks: sunrise, midday, golden hour, a night with both moons up --------------------------------

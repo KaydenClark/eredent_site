@@ -24,9 +24,9 @@ function stripDevOnly() {
 }
 
 // Served from https://kaydenclark.github.io/eredent_site/ by GitHub Pages, so assets need the repo prefix.
-// Locally (vite dev / vite preview) the base is "/".
-export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/eredent_site/' : '/',
+// vite preview serves that same build, so it keeps the prefix; only the dev server uses "/".
+export default defineConfig(({ command, isPreview }) => ({
+  base: command === 'build' || isPreview ? '/eredent_site/' : '/',
   build: { target: 'es2022', sourcemap: false, chunkSizeWarningLimit: 1200 },
   // Refuse a duplicate preview instead of silently opening another port.
   server: { host: '127.0.0.1', port: 5173, strictPort: true },

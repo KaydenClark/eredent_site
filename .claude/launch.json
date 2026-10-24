@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "kiros-dev", "runtimeExecutable": "npm", "runtimeArgs": ["--prefix", "E:/GPT_OS/Projects/eredent_site", "run", "dev"], "port": 5173 }
+    { "name": "kiros-dev", "runtimeExecutable": "npm", "runtimeArgs": ["--prefix", "E:/GPT_OS/Projects/eredent_site", "run", "dev"], "port": 5173 },
+    { "name": "kiros-prod-preview", "runtimeExecutable": "npm", "runtimeArgs": ["--prefix", "E:/GPT_OS/Projects/eredent_site", "run", "preview", "--", "--host", "127.0.0.1", "--port", "4173", "--strictPort"], "port": 4173 }
   ]
 }
