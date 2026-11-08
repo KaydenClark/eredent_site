@@ -18,7 +18,7 @@ volcano, wetland, outer ocean, orbit). `?nowelcome` skips it.
 
 ### Shared local checkout and preview
 
-On this Windows host, Claude and Codex use `E:/GPT_OS/Projects/eredent_site`.
+On this Windows host, Claude and Codex use `E:/GPT_OS/Projects/Azlemzyk/Projects/eredent_site`.
 Use the existing preview at `http://127.0.0.1:5173/`, or run `npm run dev` from
 that folder if it is stopped. The server refuses an occupied port so a second
 launch cannot silently create an extra preview. Coordinate concurrent edits;
