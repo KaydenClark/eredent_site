@@ -1,6 +1,6 @@
 # eredent_site local coordination
 
-- The canonical Windows checkout is `E:/GPT_OS/Projects/eredent_site`. Claude and
+- The canonical Windows checkout is `E:/GPT_OS/Projects/Azlemzyk/Projects/eredent_site`. Claude and
   Codex use this folder. The former `E:/GPT_OS/eredent_site/*` worktrees are retired.
 - Read `README.md` for running, testing, and local recovery. Preserve unrelated
   working files and unfinished work; inspect Git status before editing.
