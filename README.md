@@ -22,10 +22,10 @@ On this Windows host, Claude and Codex use `E:/GPT_OS/Projects/Azlemzyk/Projects
 Use the existing preview at `http://127.0.0.1:5173/`, or run `npm run dev` from
 that folder if it is stopped. The server refuses an occupied port so a second
 launch cannot silently create an extra preview. Coordinate concurrent edits;
-temporary worktrees require an explicit request and cleanup after integration.
+temporary worktrees require an explicit request and cleanup after their work merges into main.
 
 The October 11 consolidation retained all committed work from the retired
-worktrees in the `integration` history. Unfinished moon/planet edits are preserved
+worktrees in the `integration` history, which main now contains. Unfinished moon/planet edits are preserved
 on local branch `recovery/eredent-moon-unfinished-2026-10-11`; inspect that branch
 before resuming them. They are preserved work, not an accepted merge into the site.
 After saving current changes, that branch can be checked out in this same folder.
